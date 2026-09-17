@@ -1,0 +1,19 @@
+# Données et calcul
+pandas>=2.0
+numpy>=1.24
+pyarrow>=14.0        # lecture/écriture Parquet (cahier des charges §7)
+
+# Modélisation
+scikit-learn>=1.3
+joblib>=1.3          # sauvegarde des modèles entraînés (models/)
+
+# Visualisation et dashboard
+streamlit>=1.28
+matplotlib>=3.7
+seaborn>=0.12
+
+# Exploration
+jupyter>=1.0         # notebooks d'exploration (notebooks/)
+
+# Tests
+pytest>=7.4
