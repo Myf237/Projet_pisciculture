@@ -44,7 +44,8 @@ Fichier fourni : `IoTpond1.csv` — un des jeux de données du dataset *Sensor B
 
 ## Empreinte du fichier source
 
-- `IoTpond1.csv` — SHA-256 : *à renseigner au Jalon 1 lors du premier chargement (le fichier brut n'est pas versionné dans git)*
+- `IoTpond1.csv` — SHA-256 : `063ea4f0c9fcd24f016fbfc52e5422b655dfb4f3542d40476d99d899655dda76` — taille 6,8 Mo — 83 126 relevés (plus l'en-tête) — 11 colonnes conformes au schéma ci-dessus, suffixe « CET » confirmé sur `created_at`. Vérifié le 2026-09-18, à réception du fichier déposé par l'utilisateur dans `data/raw/` (J-20260918-001). Fichier non versionné dans git (`.gitignore`).
+- `data/raw/` contient aussi 10 autres fichiers de bassins (`IoTPond2.csv` à `IoTPond12.csv`, **`IoTPond5.csv` absent** du dépôt fourni), déposés par l'utilisateur en même temps qu'`IoTpond1.csv` : **hors périmètre du MVP** (ADR-001, un seul bac retenu), tous ignorés par git comme le reste de `data/raw/`. Le dataset complet compte 12 bassins ; l'absence d'`IoTPond5` est une caractéristique de ce dépôt fourni, à ne pas présenter comme une collection complète (correction N2, J-20260918-009).
 
 ## Décisions à prendre avant le développement
 

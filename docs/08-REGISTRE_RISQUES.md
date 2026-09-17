@@ -4,7 +4,7 @@ Statuts : **Ouvert** (identifié, mitigation non engagée) · **Surveillé** (mi
 
 | # | Risque | Probabilité | Impact | Mitigation | Statut |
 |---|---|---|---|---|---|
-| R1 | Dépassement du délai de 7 jours | Moyenne | Élevé | Priorisation stricte (voir `05-TIMELINE.md`), coupe de la prédiction de croissance (priorité 2) en cas de retard au Jour 4 ; suivi quotidien via `11-TABLEAU_DE_BORD.md` | Surveillé |
+| R1 | Dépassement du délai de 7 jours | Moyenne | Élevé | Priorisation stricte (voir `05-TIMELINE.md`), coupe de la prédiction de croissance (priorité 2) en cas de retard au Jour 4 ; suivi quotidien via `11-TABLEAU_DE_BORD.md`. Constat au 2026-09-18 : le Jalon 1 n'a pas démarré le 2026-09-17 comme prévu par l'ADR-006 (mise en place et levée des réserves du rapport de vérification occupant le Jour 1) ; décision de replanification non tranchée, en cours (G3, humain) | Surveillé |
 | R2 | Modèle de détection de risque peu performant (données non labellisées) | Moyenne | Moyen | Injection d'anomalies synthétiques basées sur seuils scientifiques ; évaluation qualitative sur anomalies réelles visibles dans le dataset | Ouvert |
 | R3 | Variable `Ammonia` inutilisable après nettoyage (trop d'outliers extrêmes) | Élevée | Faible | Exclusion documentée et justifiée (voir ADR-003) — ne bloque pas le reste du pipeline | Ouvert |
 | R4 | Dataset limité à un seul bac (pas de généralisation démontrée) | Élevée | Faible | Explicitement documenté comme limite dans le mémoire ; possibilité d'évoquer les autres fichiers du dataset complet comme perspective | Ouvert |

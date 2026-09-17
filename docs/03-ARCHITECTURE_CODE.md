@@ -81,7 +81,7 @@ THRESHOLDS = {
 ```
 
 - **Nettoyage** (data-engineer, Jalon 1) — bornes physiques déjà documentées : `TEMPERATURE_BOUNDS = {"min": 0, "max": 40}` et `PH_BOUNDS = {"min": 0, "max": 14}` (`docs/01`, anomalies 1-2). Décisions ouvertes, à `None` tant que l'ADR correspondant n'est pas accepté : `AMMONIA_BOUNDS` (ADR-003), `DISSOLVED_OXYGEN_BOUNDS` (A1/A2), `NITRATE_BOUNDS` (A1/A2), `MAX_INTERPOLATION_GAP` (fuseau horaire / fréquence), `RESAMPLING_FREQUENCY`. `ROLLING_WINDOW_DEFAULT = "1h"` (valeur par défaut de la fenêtre glissante, signature `add_rolling_features`).
-- **Modèles** (ml-engineer, Jalon 3) — `RANDOM_STATE = 42` ; `RISK_CLASSES = ("normal", "vigilance", "critique")` (`docs/02` §4.1) ; `TRAIN_FRACTION = 2 / 3` (split temporel — 2/3 premiers du cycle pour l'entraînement, jamais de mélange aléatoire, `docs/02` §4.2).
+- **Modèles** (ml-engineer, Jalon 3) — `RANDOM_STATE = 42` (confirmée, réserve R5 : graine arbitraire mais fixe, sans portée scientifique, à passer explicitement à tout composant aléatoire — voir le commentaire justificatif dans `src/config.py`) ; `RISK_CLASSES = ("normal", "vigilance", "critique")` (`docs/02` §4.1) ; `TRAIN_FRACTION = 2 / 3` (split temporel — 2/3 premiers du cycle pour l'entraînement, jamais de mélange aléatoire, `docs/02` §4.2).
 - **Moteur de décision** (automation-engineer, Jalon 4) — section réservée : aucune constante avant le Jalon 4 (les règles déclaratives de `docs/02` §5 y seront ajoutées).
 - **Dashboard** (dashboard-developer, Jalon 5) — section réservée : aucune constante avant le Jalon 5.
 
@@ -113,7 +113,7 @@ def add_rolling_features(df: pd.DataFrame, window: str = "1h") -> pd.DataFrame:
     """Ajoute moyennes/écarts-types glissants par variable de qualité d'eau."""
 
 def add_threshold_distance(df: pd.DataFrame, thresholds: dict) -> pd.DataFrame:
-    """Ajoute une variable d'écart au seuil critique par paramètre."""
+    """Ajoute une variable d'écart signé au seuil critique, par paramètre."""
 
 def compute_growth_rate(df: pd.DataFrame) -> pd.DataFrame:
     """Calcule le taux de croissance instantané entre deux mesures de poids."""
@@ -121,6 +121,8 @@ def compute_growth_rate(df: pd.DataFrame) -> pd.DataFrame:
 def resample_hourly(df: pd.DataFrame) -> pd.DataFrame:
     """Agrège les données à la fréquence horaire pour réduire le bruit."""
 ```
+
+Convention de `add_threshold_distance` (réserve R6, précisée dans le code par le data-engineer) : colonne `<clé>_distance_critical` par paramètre, dans la même unité que la colonne d'entrée (sans conversion). Signe : positif = marge de sécurité restante avant le seuil critique ; négatif = seuil déjà dépassé (valeur absolue = ampleur du dépassement) ; zéro = valeur au seuil. Borne critique unique inférieure (ex. `dissolved_oxygen`) : `distance = valeur - critical_min` ; borne unique supérieure (ex. `ammonia`, `nitrate`) : `distance = critical_max - valeur` ; double borne (ex. `temperature`, `ph`) : distance signée à la borne critique la plus proche. Colonne **non produite** (pas de valeur devinée) si `critical_min` et `critical_max` valent tous deux `None` (ex. `turbidity`) ou si le paramètre est `dissolved_oxygen`, `ammonia` ou `nitrate` tant que son unité n'est pas tranchée (décision A1).
 
 ## `src/models/anomaly_detection.py`
 
@@ -167,8 +169,14 @@ def evaluate_conditions(reading: dict, risk_class: str, thresholds: dict) -> lis
     ne déclenche jamais d'action.
     """
 
-def log_decision(action: dict, log_path: str = "logs/decisions.log") -> None:
-    """Ajoute l'action au journal de décisions (logs/decisions.log), en JSON Lines, UTF-8, mode ajout."""
+def log_decision(action: dict, log_path: str | Path | None = None) -> None:
+    """
+    Ajoute l'action au journal de décisions, en JSON Lines, UTF-8, mode ajout.
+    log_path : None (défaut) = chemin par défaut du projet, résolu depuis
+    config.DECISIONS_LOG_PATH (import différé) — plus de littéral relatif en
+    dur (correction du défaut D6, réserve R2) ; une valeur explicite (str ou
+    Path) prend le pas, pour les tests notamment.
+    """
 ```
 
 `python -m src.decision_engine` doit, une fois implémenté, rejouer un scénario de test et produire un log d'exemple sans dashboard. À l'état de squelette (avant le Jalon 4) : affiche un message d'erreur clair sur `stderr` et sort avec le code 1, sans trace d'exception brute.

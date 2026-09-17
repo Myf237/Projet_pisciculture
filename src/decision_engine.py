@@ -34,10 +34,14 @@ automation-engineer, ci-après « règle n° X ») :
   (constat A3 — plage optimale ou plage critique de `THRESHOLDS`) est elle
   aussi une décision ouverte non tranchée ici (docs/11).
 - `log_decision` écrit chaque action en **JSON Lines** (UTF-8, mode ajout)
-  dans `logs/decisions.log` — le journal **du produit**, distinct du journal
-  des agents (`logs/agents/journal/`, voir `.claude/rules/tracabilite.md`).
-  Chaque ligne doit suffire à reconstituer la décision a posteriori
-  (règle n°7).
+  dans le journal **du produit** (`config.DECISIONS_LOG_PATH` par défaut),
+  distinct du journal des agents (`logs/agents/journal/`, voir
+  `.claude/rules/tracabilite.md`). Chaque ligne doit suffire à reconstituer
+  la décision a posteriori (règle n°7). `log_path=None` signifie « chemin par
+  défaut du projet » : aucune valeur littérale en dur, conformément à
+  `.claude/rules/conventions-code.md` (correction D6, réserve R2 du rapport
+  de vérification `reports/validations/preparation-mise-en-place.md` —
+  arbitrage `docs/03` / conventions tranché en faveur des conventions).
 
 Ce fichier est un **squelette** (phase de préparation, avant le Jalon 4) :
 les corps de fonction lèvent `NotImplementedError` référencé à `docs/02` §5.
@@ -47,6 +51,7 @@ Aucune décision ouverte (A3, unités, anti-oscillation) n'est tranchée ici.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 
 def evaluate_conditions(reading: dict, risk_class: str, thresholds: dict) -> list[dict]:
@@ -78,21 +83,25 @@ def evaluate_conditions(reading: dict, risk_class: str, thresholds: dict) -> lis
     )
 
 
-def log_decision(action: dict, log_path: str = "logs/decisions.log") -> None:
+def log_decision(action: dict, log_path: str | Path | None = None) -> None:
     """Ajoute une action simulée au journal de décisions (JSON Lines, UTF-8, ajout).
 
     Entrée :
         action : dict d'action au format produit par `evaluate_conditions`
             (`{timestamp, action, reason, triggered_by, values, threshold,
             priority, simulated}`).
-        log_path : chemin du fichier journal (défaut : `"logs/decisions.log"`,
-            voir `src/config.py` — `DECISIONS_LOG_PATH`, section « Chemins »).
+        log_path : chemin du fichier journal. `None` (défaut) signifie « chemin
+            par défaut du projet » : résolu depuis `config.DECISIONS_LOG_PATH`
+            (import différé, comme dans `src/main.py`) — jamais de valeur
+            littérale en dur (`.claude/rules/conventions-code.md`, correction
+            D6). Une valeur explicite (`str` ou `Path`) prend le pas, pour les
+            tests notamment.
 
     Sortie :
         Aucune valeur de retour ; effet de bord voulu : une ligne JSON ajoutée
-        à `log_path` (append, jamais de réécriture du fichier). Cette ligne
-        seule doit suffire à reconstituer la décision a posteriori (règle
-        n°7). Distinct du journal des agents (`logs/agents/journal/`).
+        au fichier résolu (append, jamais de réécriture). Cette ligne seule
+        doit suffire à reconstituer la décision a posteriori (règle n°7).
+        Distinct du journal des agents (`logs/agents/journal/`).
 
     Non implémenté avant le Jalon 4 (docs/02 §5, docs/04 — Jalon 4).
     """
