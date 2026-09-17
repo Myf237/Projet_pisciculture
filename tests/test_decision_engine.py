@@ -41,6 +41,12 @@ def test_functions_raise_not_implemented_before_jalon_4() -> None:
         decision_engine.log_decision({})
 
 
+def test_log_decision_default_log_path_is_not_a_literal_path() -> None:
+    """Le défaut de `log_path` n'est pas un chemin littéral : `None` (résolu depuis `config.DECISIONS_LOG_PATH`, correction D6)."""
+    default = inspect.signature(decision_engine.log_decision).parameters["log_path"].default
+    assert default is None
+
+
 # --- Tests prévus au Jalon 4 (docs/02 §5, docs/04, règles automation-engineer) ---------
 
 
