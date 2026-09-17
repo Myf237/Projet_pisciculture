@@ -101,6 +101,13 @@ ROLLING_WINDOW_DEFAULT = "1h"
 # =====================================================================
 # Modèles — propriétaire : ml-engineer (Jalon 3)
 # =====================================================================
+# Graine arbitraire mais fixe (aucune portée scientifique, aucune valeur
+# « optimale » recherchée) : valeur confirmée par la ml-engineer, réserve R5.
+# À passer explicitement à tout composant aléatoire — `IsolationForest`,
+# `RandomForestClassifier`, `permutation_importance`, injection d'anomalies
+# synthétiques (`train_test_split` non utilisé : le split est temporel, voir
+# `TRAIN_FRACTION`). Deux exécutions identiques doivent donner les mêmes
+# métriques : la reproductibilité est vérifiée aux Jalons 3 et 6 (docs/04).
 RANDOM_STATE = 42
 RISK_CLASSES = ("normal", "vigilance", "critique")  # docs/02 §4.1
 TRAIN_FRACTION = 2 / 3  # docs/02 §4.2 — split temporel (2/3 premiers du cycle), jamais aléatoire
