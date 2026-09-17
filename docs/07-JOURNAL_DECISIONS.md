@@ -118,7 +118,7 @@ Format : `## ADR-XXX — Titre` / Statut / Contexte / Décision / Alternatives e
 
 ## ADR-006 — Référence de planning : `05-TIMELINE.md` fait foi sur le cahier des charges §9
 
-**Statut :** Accepté (2026-09-16)
+**Statut :** Remplacé par ADR-008 (2026-09-18)
 
 **Contexte :** deux plannings divergent. Le cahier des charges (§9) consacre le Jour 1 à la validation du dataset et le Jour 2 à l'ingestion/nettoyage ; `05-TIMELINE.md` regroupe structure du dépôt, ingestion et nettoyage au Jour 1, décalant les étapes suivantes. Les jalons de `04-JALONS_VALIDATION.md` suivent `05`.
 
@@ -172,6 +172,33 @@ Format : `## ADR-XXX — Titre` / Statut / Contexte / Décision / Alternatives e
 **Traçabilité :** J-20260916-014, J-20260916-015 · préparation (avant Jalon 1) · risques R13, R14
 
 **Date :** proposé le 2026-09-16 · accepté le 2026-09-16 (validation humaine explicite, rapportée par l'orchestrateur : « ajouter une règle systémique pour gérer les commits, PR et push en suivant les meilleures règles et conventions alignées avec le projet »)
+
+---
+
+## ADR-008 — Replanification : démonstration maintenue au 2026-09-23
+
+**Statut :** Accepté (2026-09-18)
+
+**Contexte :** la mise en place du dépôt (structure, garde-fous, pull requests) a occupé la journée du 2026-09-17 ; aucun jalon n'a démarré à la date initialement prévue par l'ADR-006 (Jour 1 = 2026-09-17). Le rapport de vérification et la levée des réserves ont occupé la nuit du 17 au 18/09 (PR #1 fusionnée le 2026-09-17T23:13:11Z, PR #2 le 2026-09-17T23:50:18Z). Au 2026-09-18, un jour de retard est constaté sur le planning de l'ADR-006 (`08-REGISTRE_RISQUES.md`, R1).
+
+**Décision :** la démonstration reste fixée au **2026-09-23** ; les Jalons 1 et 2 sont regroupés au 2026-09-18 (nouveau Jour 1) pour rattraper le jour perdu, sans décaler la fin du projet. Nouveau planning : Jour 1 = 18/09 (Jalons 1 et 2) → Jour 6 = 23/09 (Jalon 6, démonstration). Détail complet : `05-TIMELINE.md`.
+
+**Alternatives envisagées :**
+- Décaler la démonstration d'un jour (24/09) — écarté : aucune contrainte ne l'imposait, et la date du 23/09 avait déjà été communiquée comme repère de mémoire ; le retard d'un jour reste rattrapable en regroupant deux jalons déjà proches par nature (nettoyage et exploration reposent sur les mêmes données et le même agent propriétaire).
+- Recalculer l'ensemble du planning à rebours depuis une autre date de soutenance — écarté : aucune autre date n'a été fournie ; solution disproportionnée pour un seul jour de retard.
+
+**Justification :** les Jalons 1 et 2 sont réalisés par le même agent (`data-engineer`) et portent sur les mêmes données ; les regrouper absorbe le retard sans complexifier les jours suivants ni toucher au chemin critique du Jalon 3 (modélisation) ni à la marge de sécurité déjà prévue au Jour 4 initial (règle du Jour 4).
+
+**Conséquences :**
+- La marge de sécurité du planning est supprimée dès le départ : plus aucun jour tampon avant la démonstration du 2026-09-23.
+- Risque R1 (délai) accru : probabilité relevée dans `08-REGISTRE_RISQUES.md`, avec justification.
+- La « règle du Jour 4 » (point de bascule pour couper la prédiction de croissance si retard) s'applique désormais le 2026-09-20 (nouveau Jour 3 du planning révisé) ; le nom de la règle est conservé pour la continuité de traçabilité avec l'ADR-006.
+- Les Jalons 1 et 2 sont vérifiés le même jour, par deux rapports distincts du `qa-validator` (un par jalon), sans les fusionner en une seule vérification.
+- L'ADR-006 n'est pas réécrit : son champ Statut passe à « Remplacé par ADR-008 ».
+
+**Traçabilité :** J-20260918-012 · préparation → Jalon 1 · risque R1
+
+**Date :** proposé le 2026-09-18 · accepté le 2026-09-18 (validation humaine explicite, rapportée par l'orchestrateur : « Tenir la démo du 23/09 »)
 
 ---
 
