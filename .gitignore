@@ -1,0 +1,28 @@
+# --- Environnement Python ---
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- Données brutes : volumineuses et immuables ---
+# Non versionnées ; leur empreinte SHA-256 est consignée dans docs/01-DATA_DICTIONARY.md
+data/raw/*
+!data/raw/.gitkeep
+
+# --- Artefacts régénérables par le pipeline (src/main.py) ---
+data/processed/*
+!data/processed/.gitkeep
+models/*.joblib
+
+# --- Configuration locale personnelle Claude Code ---
+.claude/settings.local.json
+CLAUDE.local.md
+
+# --- État technique interne des hooks (pas un historique) ---
+logs/agents/.state/
+
+# --- Système ---
+.DS_Store
+Thumbs.db
