@@ -28,9 +28,9 @@ def test_add_rolling_features_uses_only_past_information() -> None:
     """add_rolling_features ne doit jamais utiliser center=True ; la valeur à t ne dépend que de t et d'avant."""
 
 
-@pytest.mark.skip(reason="Jalon 2 — distance au seuil critique calculée par paramètre, seuil non tranché (None) laissé de côté (docs/02 §3, docs/03)")
+@pytest.mark.skip(reason="Jalon 2 — distance signée au seuil critique : positif = marge de sécurité, négatif = dépassement ; colonne absente si le seuil ou l'unité (A1) n'est pas tranché (docs/02 §3, docs/03, réserve R6)")
 def test_add_threshold_distance_computes_signed_gap_per_parameter() -> None:
-    """add_threshold_distance ajoute un écart signé au seuil critique le plus proche pour chaque paramètre défini."""
+    """add_threshold_distance ajoute `<clé>_distance_critical` (positif dans la zone critique, négatif au-delà) et omet les paramètres à seuil/unité non tranchés."""
 
 
 @pytest.mark.skip(reason="Jalon 2 — taux de croissance instantané entre deux mesures de poids consécutives (docs/02 §3, docs/03)")
