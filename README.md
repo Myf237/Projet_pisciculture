@@ -6,7 +6,7 @@ Détail du contexte et des objectifs : `docs/cahier-des-charges-pisciculture-ia.
 
 ## Statut
 
-État au 2026-09-17 (Jour 1) : squelette du dépôt terminé et vérifié — structure de fichiers et signatures de fonctions en place, sans logique métier (`pytest -q` : 29 tests réussis, 38 prévus en `skip`). Vérification indépendante par `qa-validator` en cours (itération 1 : NON VALIDÉ, corrections en cours, voir `docs/11-TABLEAU_DE_BORD.md`) ; pull request vers `main` à ouvrir. Le Jalon 1 démarre après la fusion de cette pull request. Décisions bloquantes sur les données (unités, bornes, ammoniac) à trancher au tout début du Jalon 1 (`docs/11-TABLEAU_DE_BORD.md`).
+Mise en place en revue (PR #1) — état au 2026-09-17 (Jour 1) : squelette du dépôt terminé et vérifié — structure de fichiers et signatures de fonctions en place, sans logique métier (`pytest -q` : 31 tests réussis, 38 prévus en `skip`). Vérification indépendante par `qa-validator` : **VALIDÉ AVEC RÉSERVES** (voir `docs/11-TABLEAU_DE_BORD.md`). Pull request **#1** ouverte vers `main`, en attente de la décision humaine (G2) : https://github.com/Myf237/Projet_pisciculture/pull/1. Le Jalon 1 démarre après la fusion. Décisions bloquantes sur les données (unités, bornes, ammoniac) à trancher au tout début du Jalon 1 (`docs/11-TABLEAU_DE_BORD.md`).
 
 ## Structure
 
