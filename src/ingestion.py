@@ -12,7 +12,9 @@ Aucune valeur en dur : toutes les colonnes, bornes et limites utilisées ici
 viennent de `src/config.py`. Décisions appliquées : ADR-003 (ammoniac),
 ADR-009 (unités mg/L, nature réelle des capteurs), ADR-010 (bornes
 température/pH/oxygène dissous/nitrate, fuseau horaire, limite
-d'interpolation) — `docs/07-JOURNAL_DECISIONS.md`.
+d'interpolation), ADR-011 (colonnes `<label>_raw` conservant le signal brut
+en parallèle, plage de pH inchangée, turbidité en indicateur relatif) —
+`docs/07-JOURNAL_DECISIONS.md`.
 
 Notes de conception :
 - `load_raw_data` attache l'empreinte SHA-256 et le chemin du fichier source
@@ -191,8 +193,9 @@ def clean_data(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     30/07-05/08, intégralement `missing` dans la colonne nettoyée faute de
     pouvoir être interpolée sur un trou aussi long) sans renoncer au
     nettoyage de la colonne principale. Nitrate et turbidité n'ont pas de
-    borne absolue (ADR-009 pour le nitrate, décision ouverte pour la
-    turbidité, Jalon 2) : colonnes non modifiées, sans colonne de marquage
+    borne absolue — décision durable dans les deux cas, pas ouverte (ADR-009
+    pour le nitrate, capteur de gaz ; ADR-011 pour la turbidité, capteur
+    saturé sur 56,37 % des relevés) : colonnes non modifiées, sans colonne de marquage
     ni colonne `_raw` dédiée (la colonne brute est déjà, par construction,
     la seule colonne existante), seulement documentées dans le rapport pour
     rester complet par colonne (règle data-engineer n°5). `entry_id`,
@@ -332,7 +335,7 @@ def clean_data(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
             "path": df.attrs.get("source_path"),
             "sha256": df.attrs.get("source_sha256"),
         },
-        "decisions_applied": ["ADR-003", "ADR-009", "ADR-010"],
+        "decisions_applied": ["ADR-003", "ADR-009", "ADR-010", "ADR-011"],
         "timestamp_suffix_removed": config.TIMESTAMP_SUFFIX.strip(),
         "timestamp_conversion": "none (ADR-010 : suffixe retiré, horodatage conservé tel quel)",
         "max_interpolation_gap": config.MAX_INTERPOLATION_GAP,

@@ -96,7 +96,13 @@ THRESHOLDS = {
     # ci-dessous, qui les exclut automatiquement via `SENSOR_TYPES`.
     "ammonia": {"max": 0.05, "critical_max": 0.1},
     "nitrate": {"max": 50, "critical_max": 100},
-    "turbidity": {"max": None, "critical_max": None},   # à définir après exploration — Jalon 2 (docs/11)
+    # ADR-011 (accepté, 2026-09-18) : décision durable, pas ouverte — 56,37 %
+    # des relevés saturent à 100 NTU (plafond du capteur), un seuil absolu
+    # déclencherait une alerte non exploitable. Turbidité traitée en
+    # indicateur relatif, comme ammonia/nitrate ci-dessus (mêmes valeurs
+    # `None`, mais ici parce qu'aucun seuil absolu n'est retenu, pas parce
+    # que l'unité serait en cause).
+    "turbidity": {"max": None, "critical_max": None},
 }
 
 # =====================================================================
@@ -179,8 +185,12 @@ RAW_VALUE_SUFFIX = "_raw"
 # distinction entre les deux) ; `threshold_key` = clé correspondante dans
 # `THRESHOLDS` ci-dessus (utilisée par `get_applicable_thresholds()`) ;
 # `absolute_thresholds_applicable` : `True` (sonde immergée, seuils du
-# cahier §5 applicables), `False` (capteur de gaz, usage relatif
-# uniquement) ou `None` (non tranché, ex. turbidité — seuil Jalon 2) ;
+# cahier §5 applicables) ou `False` (usage relatif uniquement — capteur de
+# gaz comme ammonia/nitrate, ADR-009, ou indicateur saturé comme turbidity,
+# ADR-011 ; ces deux raisons sont distinctes mais produisent le même
+# comportement via `get_applicable_thresholds()`). `None` resterait
+# réservé à une variable dont l'applicabilité n'est pas encore tranchée —
+# aucune entrée de `SENSOR_TYPES` n'est plus dans ce cas depuis l'ADR-011 ;
 # `note` = texte de contexte inclus tel quel dans `reports/cleaning_report.json`
 # par colonne (construit ici, jamais par comparaison à un nom de colonne en
 # dur dans `src/ingestion.py` — D8, reports/validations/jalon-1.md), ou
@@ -247,12 +257,18 @@ SENSOR_TYPES = {
     "Turbidity(NTU)": {
         "label": "Turbidity",
         "sensor": "immersed",
-        "bounds": None,  # seuil à définir après exploration — Jalon 2 (docs/11)
+        # ADR-011 (accepté) : décision durable, pas ouverte — même statut que
+        # NITRATE_BOUNDS (aucune borne physique absolue), pour une raison
+        # différente (saturation du capteur à 100 NTU sur 56,37 % des
+        # relevés, pas une question d'unité ou de nature de capteur).
+        "bounds": None,
         "threshold_key": "turbidity",
-        "absolute_thresholds_applicable": None,
+        "absolute_thresholds_applicable": False,
         "note": (
-            "Seuil non tranché (décision ouverte, Jalon 2) — colonne non "
-            "modifiée par le nettoyage."
+            "ADR-011 : indicateur relatif, aucun seuil absolu retenu (56,37 % "
+            "des relevés saturés au plafond du capteur, 100 NTU — voir "
+            "reports/analyse-donnees-jalon1.md, addendum du Jalon 2) — "
+            "colonne non modifiée par le nettoyage."
         ),
     },
 }
@@ -268,9 +284,10 @@ def get_applicable_thresholds() -> dict[str, dict]:
     seulement documenté : contrairement à une lecture directe de
     `THRESHOLDS`, cette fonction ne peut **jamais** renvoyer de seuil pour
     `ammonia`/`nitrate` (capteurs de gaz, ADR-009) ni pour `turbidity`
-    (décision non tranchée), même si `THRESHOLDS` contient une valeur
-    numérique héritée pour ces clés — un appelant qui l'utilise ne peut pas
-    appliquer par erreur un seuil aquacole absolu à une mesure de gaz.
+    (indicateur relatif, ADR-011 — capteur saturé sur 56,37 % des relevés),
+    même si `THRESHOLDS` contient une valeur numérique héritée pour ces
+    clés — un appelant qui l'utilise ne peut pas appliquer par erreur un
+    seuil aquacole absolu à une mesure de gaz ou à un capteur saturé.
     """
     return {
         meta["threshold_key"]: THRESHOLDS[meta["threshold_key"]]

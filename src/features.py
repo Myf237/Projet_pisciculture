@@ -20,6 +20,15 @@ mesurées (`<label>_imputed`). Aucune fonction de ce module ne doit faire
 passer une valeur interpolée pour une mesure : `resample_hourly` propage donc
 des compteurs de valeurs réellement mesurées, imputées et manquantes par
 créneau, en plus de la moyenne agrégée.
+
+Décision G1 du 2026-09-19 (J-20260919-002, défaut D1 `reports/validations/
+jalon-2.md`) : le signal brut conservé par ADR-011 (`<label>
+{config.RAW_VALUE_SUFFIX}`, ex. `Dissolved Oxygen_raw`) est désormais propagé
+par `add_rolling_features` (moyenne/écart-type glissants sur le signal brut)
+et `resample_hourly` (moyenne horaire, compteur de valeurs hors borne, écart
+brut/nettoyé) — sans quoi ce signal, restauré au Jalon 1, disparaissait dès
+la première transformation en aval et le Jalon 3 ne pouvait plus détecter
+l'épisode 1 (plateau DO 36-41 mg/L, entièrement `missing` côté nettoyé).
 """
 
 from __future__ import annotations
@@ -40,7 +49,15 @@ def add_rolling_features(df: pd.DataFrame, window: str = config.ROLLING_WINDOW_D
     pour chaque colonne de `config.SENSOR_TYPES` présente d'une colonne
     `<label>_rolling_mean` et `<label>_rolling_std` (`label` =
     `config.SENSOR_TYPES[...]["label"]`, même convention que
-    `<label>_imputed`/`<label>_missing` de `src/ingestion.py`).
+    `<label>_imputed`/`<label>_missing` de `src/ingestion.py`) — **et**, quand
+    la colonne `<label>{config.RAW_VALUE_SUFFIX}` est présente (ADR-011,
+    signal brut conservé en parallèle), des colonnes
+    `<label>{config.RAW_VALUE_SUFFIX}_rolling_mean`/`_rolling_std` calculées
+    de la même façon sur le signal brut. Décision G1 du 2026-09-19
+    (J-20260919-002, défaut D1 `reports/validations/jalon-2.md`) : le signal
+    restauré par l'ADR-011 doit être propagé au-delà du nettoyage, pas
+    seulement présent dans le livrable — sinon il disparaît dès la première
+    transformation en aval et le Jalon 3 ne peut plus le voir.
 
     Règles à respecter : fenêtre **causale uniquement** (tournée vers le
     passé, jamais `center=True`) — implémentée via un `rolling` temporel
@@ -48,15 +65,20 @@ def add_rolling_features(df: pd.DataFrame, window: str = config.ROLLING_WINDOW_D
     défaut (`closed="right"`) inclut la valeur au temps t et les valeurs des
     `window` précédentes, jamais une valeur future : aucune information
     future n'entre dans la valeur au temps t (règle data-engineer n°8), ce
-    qui reste valide en rejeu temps réel. Implémentation vectorisée
-    (`Series.rolling`), pas de boucle ligne à ligne sur les ~83 000 relevés
-    (règle data-engineer n°9). Les valeurs manquantes (`NaN`, y compris
-    celles marquées `<label>_missing`) sont ignorées dans le calcul de la
-    moyenne/écart-type de leur fenêtre (comportement par défaut de
-    `Series.rolling`, cohérent avec l'absence de valeur inventée) ; les
-    colonnes `<label>_imputed`/`<label>_missing` déjà présentes en entrée
-    sont conservées telles quelles dans la sortie, sans être elles-mêmes
-    lissées.
+    qui reste valide en rejeu temps réel — la colonne brute suit exactement
+    la même règle de causalité que la colonne nettoyée, aucun traitement de
+    faveur. Implémentation vectorisée (`Series.rolling`), pas de boucle
+    ligne à ligne sur les ~83 000 relevés (règle data-engineer n°9). Les
+    valeurs manquantes (`NaN`, y compris celles marquées `<label>_missing`)
+    sont ignorées dans le calcul de la moyenne/écart-type de leur fenêtre
+    (comportement par défaut de `Series.rolling`, cohérent avec l'absence de
+    valeur inventée) ; les colonnes `<label>_imputed`/`<label>_missing`/
+    `<label>{config.RAW_VALUE_SUFFIX}` déjà présentes en entrée sont
+    conservées telles quelles dans la sortie, sans être elles-mêmes lissées.
+    **Non-contamination** : la colonne glissante nettoyée est calculée
+    uniquement à partir de la colonne nettoyée, la colonne glissante brute
+    uniquement à partir de la colonne `_raw` — jamais de mélange des deux
+    séries dans un même calcul.
     """
     ts_col = config.TIMESTAMP_COLUMN
     if ts_col not in df.columns:
@@ -65,15 +87,21 @@ def add_rolling_features(df: pd.DataFrame, window: str = config.ROLLING_WINDOW_D
     working = df.sort_values(ts_col, kind="mergesort").reset_index(drop=True).copy()
     indexed = working.set_index(ts_col)
 
-    for raw_col, meta in config.SENSOR_TYPES.items():
-        if raw_col not in indexed.columns:
-            continue
-        label = meta["label"]
+    def _add_rolling_pair(column_name: str, output_label: str) -> None:
         # `closed` non précisé = défaut pandas "right" pour un rolling temporel :
         # intervalle (t - window, t], jamais center=True (règle n°8).
-        rolling = indexed[raw_col].rolling(window, min_periods=1)
-        working[f"{label}_rolling_mean"] = rolling.mean().to_numpy()
-        working[f"{label}_rolling_std"] = rolling.std().to_numpy()
+        rolling = indexed[column_name].rolling(window, min_periods=1)
+        working[f"{output_label}_rolling_mean"] = rolling.mean().to_numpy()
+        working[f"{output_label}_rolling_std"] = rolling.std().to_numpy()
+
+    for raw_col, meta in config.SENSOR_TYPES.items():
+        label = meta["label"]
+        if raw_col in indexed.columns:
+            _add_rolling_pair(raw_col, label)
+
+        raw_value_col = f"{label}{config.RAW_VALUE_SUFFIX}"
+        if raw_value_col in indexed.columns:
+            _add_rolling_pair(raw_value_col, raw_value_col)
 
     return working
 
@@ -123,12 +151,14 @@ def add_threshold_distance(df: pd.DataFrame, thresholds: dict) -> pd.DataFrame:
       `config.get_applicable_thresholds()` (sondes immergées à seuils
       aquacoles applicables — température, pH, oxygène dissous). Sont donc
       exclus : `turbidity` (`critical_min`/`critical_max` valent tous deux
-      `None`, seuil encore à définir — Jalon 2, docs/11) et `ammonia` /
-      `nitrate`, non plus pour une question d'unité mais parce que ce sont
-      des capteurs de gaz suspendus au-dessus de l'eau, pas des sondes
-      immergées (ADR-009) — `THRESHOLDS["ammonia"]`/`["nitrate"]` contiennent
-      des valeurs numériques héritées du cahier §5 qui ne doivent jamais être
-      lues comme des seuils absolus (règle data-engineer n°3). Ce filtre est
+      `None` de façon durable — indicateur relatif, ADR-011, 56,37 % des
+      relevés saturés au plafond du capteur, pas une décision encore
+      ouverte) et `ammonia` / `nitrate`, pour une autre raison, la nature du
+      capteur — ce sont des capteurs de gaz suspendus au-dessus de l'eau,
+      pas des sondes immergées (ADR-009) — `THRESHOLDS["ammonia"]`/`["nitrate"]`
+      contiennent des valeurs numériques héritées du cahier §5 qui ne doivent
+      jamais être lues comme des seuils absolus (règle data-engineer n°3).
+      Ce filtre est
       appliqué à `thresholds` (le dict passé en paramètre), pas seulement à
       `config.THRESHOLDS` : même un `thresholds` custom contenant `ammonia`
       ou `nitrate` ne produit jamais de colonne pour ces clés.
@@ -223,34 +253,60 @@ def resample_hourly(df: pd.DataFrame) -> pd.DataFrame:
     """Agrège les données à la fréquence horaire pour réduire le bruit.
 
     Entrée : DataFrame nettoyé (sortie de `ingestion.clean_data`, colonnes
-    brutes de `config.SENSOR_TYPES` et, quand applicable, `<label>_imputed`/
-    `<label>_missing` — docs/03), indexable par `config.TIMESTAMP_COLUMN`.
+    brutes de `config.SENSOR_TYPES`, quand applicable `<label>_imputed`/
+    `<label>_missing`, et quand applicable `<label>{config.RAW_VALUE_SUFFIX}`
+    — ADR-011 — docs/03), indexable par `config.TIMESTAMP_COLUMN`.
     Sortie : DataFrame ré-échantillonné à la fréquence `config.RESAMPLING_
     FREQUENCY` (ADR-010, "1h"), une ligne par créneau horaire de l'étendue
     temporelle couverte par `df` (créneaux vides inclus, jamais omis). Pour
     chaque créneau :
     - `n_readings` : nombre total de relevés bruts tombés dans ce créneau
       (0 pour un créneau sans aucun relevé — pas de valeur inventée).
-    - `<label>_mean` : moyenne du créneau (ignore les `NaN` ; `NaN` si aucune
-      valeur présente dans le créneau — jamais de valeur fabriquée pour un
-      créneau vide).
+    - `<label>_mean` : moyenne **de la colonne nettoyée** du créneau (ignore
+      les `NaN` ; `NaN` si aucune valeur présente dans le créneau — jamais de
+      valeur fabriquée pour un créneau vide).
     - `<label>_n_measured` : nombre de valeurs **réellement mesurées** dans
       le créneau (présentes et non `<label>_imputed`) — pour les colonnes
-      sans borne de nettoyage (Nitrate, Turbidity, ADR-009), toute valeur
-      brute présente est une mesure réelle (aucune imputation possible).
+      sans borne de nettoyage (Nitrate : ADR-009 ; Turbidity : ADR-011),
+      toute valeur brute présente est une mesure réelle (aucune imputation
+      possible).
     - `<label>_n_imputed` : nombre de valeurs comblées par interpolation
       dans le créneau (`<label>_imputed` = True).
     - `<label>_n_missing` : nombre de valeurs manquantes dans le créneau —
       pour les colonnes bornées, `<label>_missing` = True (hors bornes non
-      comblé) ; pour les colonnes sans borne de nettoyage (Nitrate,
-      Turbidity), `n_readings - n_present` (valeur brute `NaN` dans le CSV
-      d'origine, aucune borne ni imputation ne s'y applique). Par
-      construction, `n_measured + n_imputed + n_missing == n_readings` pour
-      chaque créneau et chaque variable.
+      comblé) ; pour les colonnes sans borne de nettoyage, `n_readings -
+      n_present` (valeur brute `NaN` dans le CSV d'origine, aucune borne ni
+      imputation ne s'y applique). Par construction, `n_measured + n_imputed
+      + n_missing == n_readings` pour chaque créneau et chaque variable.
     Ces compteurs (R16, `docs/08-REGISTRE_RISQUES.md`) permettent au Jalon 3
     de ne jamais traiter `<label>_mean` comme une moyenne de mesures quand
     `<label>_n_measured` est nul ou faible pour ce créneau : la moyenne peut
     exister (valeurs imputées) sans qu'aucune mesure réelle n'existe.
+
+    **Propagation du signal brut (ADR-011, décision G1 du 2026-09-19,
+    J-20260919-002, défaut D1 `reports/validations/jalon-2.md`).** Pour
+    chaque variable bornée dont la colonne `<label>{config.RAW_VALUE_SUFFIX}`
+    est présente en entrée, quatre colonnes supplémentaires, calculées
+    **uniquement** à partir du signal brut (jamais mélangées avec la colonne
+    nettoyée — non-contamination) :
+    - `<label>{RAW_VALUE_SUFFIX}_mean` : moyenne du signal brut du créneau
+      (ignore les `NaN` d'origine, `NaN` si aucune valeur brute présente).
+    - `<label>{RAW_VALUE_SUFFIX}_n_present` : nombre de valeurs brutes non
+      manquantes dans le créneau (avant toute borne).
+    - `<label>_n_out_of_bounds` : nombre de valeurs brutes du créneau qui
+      dépassent `config.SENSOR_TYPES[...]["bounds"]` — le compteur demandé
+      par la décision G1 pour repérer, créneau par créneau, une dérive de
+      capteur même quand la colonne nettoyée correspondante est entièrement
+      `missing` (ex. épisode 1, plateau DO 36-41 mg/L du 30/07 au 05/08).
+    - `<label>_gap_mean` = `<label>{RAW_VALUE_SUFFIX}_mean` -
+      `<label>_mean` : écart entre la moyenne brute et la moyenne nettoyée
+      du même créneau (`NaN` si l'une des deux moyennes l'est — notamment
+      pendant un épisode où la colonne nettoyée est entièrement manquante,
+      auquel cas l'absence de la colonne nettoyée est déjà visible via
+      `<label>_n_measured == 0`, pas besoin d'un écart chiffré). Fourni à
+      titre diagnostique (la décision G1 le laissait à l'appréciation de
+      l'agent) : un grand écart signale que la colonne nettoyée sous-estime
+      ou sur-estime le signal réel du créneau.
 
     Règles à respecter : `config.RESAMPLING_FREQUENCY` (jamais une fréquence
     en dur) ; agrégation strictement intra-créneau — un créneau horaire
@@ -273,6 +329,30 @@ def resample_hourly(df: pd.DataFrame) -> pd.DataFrame:
 
     working = df.sort_values(ts_col, kind="mergesort").reset_index(drop=True)
     indexed = working.set_index(ts_col)
+
+    # Compteurs "hors borne" du signal brut (ADR-011), calculés AVANT de
+    # construire le resampler et ajoutés comme colonnes temporaires : cela
+    # garantit un découpage en créneaux strictement identique à celui des
+    # autres agrégats (même resampler, mêmes bornes de créneau), condition
+    # de la non-contamination entre agrégats nettoyés et bruts.
+    out_of_bounds_temp_columns: dict[str, str] = {}
+    for raw_col, meta in config.SENSOR_TYPES.items():
+        bounds = meta["bounds"]
+        raw_value_col = f"{meta['label']}{config.RAW_VALUE_SUFFIX}"
+        if bounds is None or raw_value_col not in indexed.columns:
+            continue
+        raw_series = indexed[raw_value_col]
+        lower, upper = bounds.get("min"), bounds.get("max")
+        out_of_bounds = pd.Series(False, index=indexed.index)
+        if lower is not None:
+            out_of_bounds |= raw_series < lower
+        if upper is not None:
+            out_of_bounds |= raw_series > upper
+        out_of_bounds &= raw_series.notna()
+        temp_col = f"__{meta['label']}_out_of_bounds"
+        indexed[temp_col] = out_of_bounds
+        out_of_bounds_temp_columns[meta["label"]] = temp_col
+
     resampler = indexed.resample(freq)
 
     n_readings = resampler.size()
@@ -295,10 +375,10 @@ def resample_hourly(df: pd.DataFrame) -> pd.DataFrame:
             n_missing = resampler[missing_col].sum()
             n_measured = n_present - n_imputed
         else:
-            # Colonne sans borne de nettoyage (Nitrate, Turbidity — ADR-009 /
-            # décision ouverte) : aucune imputation possible, toute valeur
-            # présente est une mesure réelle ; une valeur brute manquante
-            # (NaN dans le CSV d'origine) reste "manquante", jamais imputée.
+            # Colonne sans borne de nettoyage (Nitrate : ADR-009 ; Turbidity :
+            # ADR-011) : aucune imputation possible, toute valeur présente
+            # est une mesure réelle ; une valeur brute manquante (NaN dans le
+            # CSV d'origine) reste "manquante", jamais imputée.
             n_measured = n_present
             n_imputed = pd.Series(0, index=n_present.index)
             n_missing = n_readings - n_present
@@ -306,5 +386,16 @@ def resample_hourly(df: pd.DataFrame) -> pd.DataFrame:
         aggregated[f"{label}_n_measured"] = n_measured.astype("int64")
         aggregated[f"{label}_n_imputed"] = n_imputed.astype("int64")
         aggregated[f"{label}_n_missing"] = n_missing.astype("int64")
+
+        # --- Propagation du signal brut (ADR-011, D1 jalon-2.md) ----------
+        raw_value_col = f"{label}{config.RAW_VALUE_SUFFIX}"
+        if raw_value_col in indexed.columns:
+            aggregated[f"{raw_value_col}_mean"] = resampler[raw_value_col].mean()
+            aggregated[f"{raw_value_col}_n_present"] = resampler[raw_value_col].count().astype("int64")
+            if label in out_of_bounds_temp_columns:
+                aggregated[f"{label}_n_out_of_bounds"] = (
+                    resampler[out_of_bounds_temp_columns[label]].sum().astype("int64")
+                )
+            aggregated[f"{label}_gap_mean"] = aggregated[f"{raw_value_col}_mean"] - aggregated[f"{label}_mean"]
 
     return aggregated.reset_index()

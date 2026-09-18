@@ -142,6 +142,60 @@ def test_add_rolling_features_default_window_is_config_value() -> None:
     assert sig.parameters["window"].default == config.ROLLING_WINDOW_DEFAULT
 
 
+# --- add_rolling_features : propagation du signal brut (ADR-011, G1 --------
+# --- du 2026-09-19, J-20260919-002, défaut D1 reports/validations/jalon-2.md)
+
+
+def test_add_rolling_features_also_rolls_raw_value_column_when_present() -> None:
+    """<label>_raw produit aussi <label>_raw_rolling_mean/_rolling_std (le signal brut ne s'arrête pas au nettoyage, D1)."""
+    df = _rolling_input(
+        [
+            {"created_at": "2021-07-30 02:00:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": 38.6},
+            {"created_at": "2021-07-30 02:20:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": 39.1},
+        ]
+    )
+    out = features.add_rolling_features(df, window="1h")
+
+    assert "Dissolved Oxygen_raw_rolling_mean" in out.columns
+    assert "Dissolved Oxygen_raw_rolling_std" in out.columns
+    assert out.loc[1, "Dissolved Oxygen_raw_rolling_mean"] == pytest.approx((38.6 + 39.1) / 2)
+    # La colonne nettoyée (entièrement NaN ici) donne une moyenne glissante NaN
+    # elle aussi : pas de fuite depuis la colonne brute vers la colonne nettoyée.
+    assert pd.isna(out.loc[1, "Dissolved Oxygen_rolling_mean"])
+
+
+def test_add_rolling_features_raw_and_cleaned_columns_do_not_contaminate_each_other() -> None:
+    """Les moyennes glissantes nettoyée et brute restent calculées indépendamment, même quand les deux colonnes divergent fortement."""
+    df = _rolling_input(
+        [
+            {"created_at": "2021-06-19 00:00:00", "Dissolved Oxygen(g/ml)": 5.0, "Dissolved Oxygen_raw": 38.6},
+            {"created_at": "2021-06-19 00:20:00", "Dissolved Oxygen(g/ml)": 5.2, "Dissolved Oxygen_raw": 39.1},
+        ]
+    )
+    out = features.add_rolling_features(df, window="1h")
+
+    assert out.loc[1, "Dissolved Oxygen_rolling_mean"] == pytest.approx((5.0 + 5.2) / 2)
+    assert out.loc[1, "Dissolved Oxygen_raw_rolling_mean"] == pytest.approx((38.6 + 39.1) / 2)
+
+
+def test_add_rolling_features_raw_column_is_also_causal() -> None:
+    """La colonne brute suit la même règle de causalité que la colonne nettoyée : aucune valeur future n'y entre."""
+    base_rows = [
+        {"created_at": "2021-07-30 02:00:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": 38.6},
+        {"created_at": "2021-07-30 02:20:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": 39.1},
+    ]
+    out_past_only = features.add_rolling_features(_rolling_input(base_rows), window="1h")
+    out_with_future = features.add_rolling_features(
+        _rolling_input(base_rows + [{"created_at": "2021-07-30 02:21:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": 999.0}]),
+        window="1h",
+    )
+    pd.testing.assert_series_equal(
+        out_past_only["Dissolved Oxygen_raw_rolling_mean"],
+        out_with_future["Dissolved Oxygen_raw_rolling_mean"].iloc[:2],
+        check_names=False,
+    )
+
+
 # --- add_threshold_distance : convention de signe ---------------------------
 
 
@@ -172,8 +226,8 @@ def test_add_threshold_distance_single_lower_bound_dissolved_oxygen() -> None:
     assert out.loc[2, "dissolved_oxygen_distance_critical"] == pytest.approx(2.0)
 
 
-def test_add_threshold_distance_omits_gas_sensors_and_undecided_turbidity() -> None:
-    """Ammonia/Nitrate (capteurs de gaz, ADR-009) et Turbidity (seuil non tranché) n'ont jamais de colonne produite, même présents dans thresholds."""
+def test_add_threshold_distance_omits_gas_sensors_and_turbidity_indicator() -> None:
+    """Ammonia/Nitrate (capteurs de gaz, ADR-009) et Turbidity (indicateur relatif, ADR-011 — décision durable, pas ouverte) n'ont jamais de colonne produite, même présents dans thresholds."""
     df = pd.DataFrame({
         "temperature": [27.0],
         "ph": [7.5],
@@ -354,3 +408,118 @@ def test_resample_hourly_uses_configured_frequency() -> None:
     out = features.resample_hourly(df)
     # 4 créneaux horaires couverts (00:00 à 03:00 inclus) : la fréquence horaire est bien appliquée.
     assert len(out) == 4
+
+
+# --- resample_hourly : propagation du signal brut (ADR-011, G1 du 2026-09-19,
+# --- J-20260919-002, défaut D1 reports/validations/jalon-2.md) --------------
+
+
+def test_resample_hourly_propagates_raw_mean_and_out_of_bounds_counter() -> None:
+    """<label>_raw_mean, <label>_raw_n_present et <label>_n_out_of_bounds sont produits à partir du seul signal brut."""
+    df = _resample_input(
+        [
+            {"created_at": "2021-07-30 02:05:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": 38.6,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": True},
+            {"created_at": "2021-07-30 02:35:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": 39.1,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": True},
+        ]
+    )
+    out = features.resample_hourly(df)
+    slot = out.iloc[0]
+
+    assert slot["Dissolved Oxygen_raw_mean"] == pytest.approx((38.6 + 39.1) / 2)
+    assert slot["Dissolved Oxygen_raw_n_present"] == 2
+    # Les deux valeurs brutes dépassent DISSOLVED_OXYGEN_BOUNDS["max"] = 15 :
+    # le compteur "hors borne" les voit, alors que la colonne nettoyée est
+    # entièrement manquante (n_measured = 0) sur ce créneau.
+    assert slot["Dissolved Oxygen_n_out_of_bounds"] == 2
+    assert slot["Dissolved Oxygen_n_measured"] == 0
+    assert pd.isna(slot["Dissolved Oxygen_mean"])
+
+
+def test_resample_hourly_gap_mean_is_nan_when_cleaned_column_fully_missing() -> None:
+    """<label>_gap_mean est NaN quand la colonne nettoyée n'a aucune valeur dans le créneau (pas de valeur inventée)."""
+    df = _resample_input(
+        [
+            {"created_at": "2021-07-30 02:05:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": 38.6,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": True},
+        ]
+    )
+    out = features.resample_hourly(df)
+    assert pd.isna(out.iloc[0]["Dissolved Oxygen_gap_mean"])
+
+
+def test_resample_hourly_gap_mean_is_computed_when_both_means_present() -> None:
+    """<label>_gap_mean = moyenne brute - moyenne nettoyée quand les deux existent dans le créneau."""
+    df = _resample_input(
+        [
+            {"created_at": "2021-06-19 00:05:00", "Dissolved Oxygen(g/ml)": 5.0, "Dissolved Oxygen_raw": 5.0,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": False},
+            {"created_at": "2021-06-19 00:35:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": 38.6,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": True},
+        ]
+    )
+    out = features.resample_hourly(df)
+    slot = out.iloc[0]
+    expected_raw_mean = (5.0 + 38.6) / 2
+    expected_clean_mean = 5.0
+    assert slot["Dissolved Oxygen_gap_mean"] == pytest.approx(expected_raw_mean - expected_clean_mean)
+
+
+def test_resample_hourly_raw_and_cleaned_aggregates_do_not_contaminate_each_other() -> None:
+    """Non-contamination : <label>_mean ne reflète jamais le signal brut, <label>_raw_mean ne reflète jamais la colonne nettoyée."""
+    df = _resample_input(
+        [
+            {"created_at": "2021-06-19 00:05:00", "Dissolved Oxygen(g/ml)": 5.0, "Dissolved Oxygen_raw": 38.6,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": False},
+            {"created_at": "2021-06-19 00:35:00", "Dissolved Oxygen(g/ml)": 5.4, "Dissolved Oxygen_raw": 39.1,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": False},
+        ]
+    )
+    out = features.resample_hourly(df)
+    slot = out.iloc[0]
+
+    assert slot["Dissolved Oxygen_mean"] == pytest.approx((5.0 + 5.4) / 2)
+    assert slot["Dissolved Oxygen_raw_mean"] == pytest.approx((38.6 + 39.1) / 2)
+    # Les deux moyennes restent nettement distinctes : aucun mélange des deux séries.
+    assert abs(slot["Dissolved Oxygen_mean"] - slot["Dissolved Oxygen_raw_mean"]) > 30
+
+
+def test_resample_hourly_no_out_of_bounds_column_for_unbounded_variables() -> None:
+    """Nitrate/Turbidity (sans borne, sans colonne _raw) n'ont pas de <label>_n_out_of_bounds — rien à compter."""
+    df = _resample_input(
+        [{"created_at": "2021-06-19 00:05:00", "Nitrate(g/ml)": 150, "Turbidity(NTU)": 60}]
+    )
+    out = features.resample_hourly(df)
+    assert "Nitrate_n_out_of_bounds" not in out.columns
+    assert "Turbidity_n_out_of_bounds" not in out.columns
+    assert "Nitrate_raw_mean" not in out.columns
+
+
+def test_resample_hourly_episode1_do_plateau_visible_in_raw_hourly_aggregates() -> None:
+    """Vérification par le calcul (jeu synthétique représentatif de l'épisode 1) : le plateau DO 36-41 mg/L ressort
+    dans les agrégats horaires issus du brut, alors que la colonne nettoyée y est quasi vide (défaut D1, jalon-2.md)."""
+    rows = [
+        {"created_at": "2021-07-29 23:00:00", "Dissolved Oxygen(g/ml)": 4.0, "Dissolved Oxygen_raw": 4.0,
+         "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": False},
+    ]
+    # Plateau hors bornes sur plusieurs créneaux horaires consécutifs (30/07, 02h-05h) :
+    # aucun voisin valide proche, donc entièrement `missing` côté colonne nettoyée.
+    plateau_values = [38.6, 39.1, 40.2, 37.8]
+    for hour, value in zip(range(2, 6), plateau_values):
+        rows.append({
+            "created_at": f"2021-07-30 0{hour}:15:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": value,
+            "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": True,
+        })
+    df = _resample_input(rows)
+    out = features.resample_hourly(df)
+
+    plateau_slots = out[out[config.TIMESTAMP_COLUMN].between("2021-07-30 02:00:00", "2021-07-30 05:00:00")]
+    assert len(plateau_slots) == 4
+    # Côté nettoyé : rien d'exploitable.
+    assert plateau_slots["Dissolved Oxygen_n_measured"].sum() == 0
+    assert plateau_slots["Dissolved Oxygen_mean"].isna().all()
+    # Côté brut : le plateau est intégralement visible et dans la plage attendue.
+    assert plateau_slots["Dissolved Oxygen_raw_n_present"].sum() == 4
+    assert plateau_slots["Dissolved Oxygen_raw_mean"].between(35, 41).all()
+    assert plateau_slots["Dissolved Oxygen_n_out_of_bounds"].sum() == 4
