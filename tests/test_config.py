@@ -134,9 +134,9 @@ def test_ph_bounds_match_data_dictionary() -> None:
     assert config.PH_BOUNDS == {"min": 0, "max": 14}
 
 
-def test_open_decisions_are_none_not_guessed_values() -> None:
-    """RESAMPLING_FREQUENCY reste None (décision tranchée par ADR-010 mais appliquée seulement au Jalon 2, pas au nettoyage)."""
-    assert config.RESAMPLING_FREQUENCY is None
+def test_resampling_frequency_is_hourly_per_adr_010_applied_at_jalon_2() -> None:
+    """RESAMPLING_FREQUENCY = "1h" (ADR-010, décidée au Jalon 1) — appliquée par features.resample_hourly au Jalon 2."""
+    assert config.RESAMPLING_FREQUENCY == "1h"
 
 
 def test_ammonia_bounds_match_adr_003_and_adr_010() -> None:

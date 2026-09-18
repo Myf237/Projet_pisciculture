@@ -141,14 +141,32 @@ NITRATE_BOUNDS = None
 # `ROLLING_WINDOW_DEFAULT` ci-dessous.
 MAX_INTERPOLATION_GAP = "1h"
 
-# Décision ouverte pour l'implémentation (Jalon 2 seulement) — la fréquence
-# elle-même est tranchée par l'ADR-010 (horaire), mais son application
-# (`src/features.py::resample_hourly`) n'est pas dans le périmètre du
-# nettoyage (Jalon 1) : ne pas l'exploiter avant l'implémentation réelle.
-RESAMPLING_FREQUENCY = None
+# ADR-010 (accepté) : fréquence de ré-échantillonnage horaire — décidée dès
+# le Jalon 1 mais dont l'application était différée au Jalon 2, hors
+# périmètre du nettoyage. Appliquée depuis le Jalon 2 par
+# `src/features.py::resample_hourly` (Module 2, docs/02 §3). Chaîne
+# compatible `pandas.Timedelta`/`DataFrame.resample`, même convention que
+# `MAX_INTERPOLATION_GAP` et `ROLLING_WINDOW_DEFAULT`. Ce n'est pas une
+# nouvelle décision : la valeur ne change pas depuis l'ADR-010, seule son
+# exploitation dans le code change.
+RESAMPLING_FREQUENCY = "1h"
 
 # Fenêtre glissante par défaut (signature `add_rolling_features`, docs/03).
 ROLLING_WINDOW_DEFAULT = "1h"
+
+# Décision G1 du 2026-09-18 (J-20260918-042/044) : la borne de nettoyage
+# reste appliquée à la colonne nettoyée (comportement inchangé), mais la
+# valeur brute d'origine — y compris hors bornes, sans imputation — est
+# conservée en parallèle dans une colonne `<label>{RAW_VALUE_SUFFIX}`, pour
+# chaque variable bornée de `SENSOR_TYPES` (température, pH, oxygène
+# dissous, ammoniac). Objectif : les dérives de capteur (ex. plateau DO
+# 36-41 mg/L du 30/07-05/08, entièrement `missing` dans la colonne nettoyée)
+# redeviennent visibles et exploitables au Jalon 3 et pour la démonstration,
+# sans renoncer au nettoyage. Même famille de convention que `_imputed`/
+# `_missing` (suffixes eux-mêmes non dupliqués ici, littéraux dans
+# `src/ingestion.py`, cohérent avec D8, reports/validations/jalon-1.md) ;
+# celui-ci est explicitement déclaré ici à la demande de la décision G1.
+RAW_VALUE_SUFFIX = "_raw"
 
 # Structure déclarant, pour chaque variable de qualité d'eau, le type de
 # capteur réel (ADR-009, article source Udanor et al.) et l'applicabilité
