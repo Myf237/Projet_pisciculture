@@ -63,10 +63,21 @@ RAW_COLUMNS = [
 ]
 
 TIMESTAMP_COLUMN = "created_at"
-# Suffixe présent dans la colonne brute, à retirer avant parsing (docs/01 —
-# fuseau horaire ambigu, anomalie 11 ; hypothèse retenue = décision ouverte
-# ci-dessous, `MAX_INTERPOLATION_GAP`).
+# Suffixe présent dans la colonne brute, retiré avant parsing, sans aucune
+# conversion de fuseau (ADR-010, accepté 2026-09-18) : les données ne
+# permettent pas de trancher entre « CET » littéral et l'heure locale du
+# Nigeria (WAT), les deux hypothèses partageant le même décalage UTC+1
+# (reports/analyse-donnees-jalon1.md §9). L'horodatage est conservé tel quel.
 TIMESTAMP_SUFFIX = " CET"
+
+# Colonnes de la courbe de croissance (mesures manuelles périodiques,
+# propagées sur les relevés intermédiaires — docs/01 anomalie 5), utilisées
+# par `ingestion.rebuild_growth_curve`. Clé = nom court sans unité, utilisé
+# pour les colonnes signalant une non-monotonie (`<clé>_non_monotonic`).
+GROWTH_COLUMNS = {
+    "Fish_Weight(g)": "Fish_Weight",
+    "Fish_Length(cm)": "Fish_Length",
+}
 
 # =====================================================================
 # Seuils scientifiques — commun à tous les agents, ADR requis pour toute
@@ -76,8 +87,15 @@ THRESHOLDS = {
     "temperature": {"min": 26, "max": 32, "critical_min": 20, "critical_max": 35},
     "dissolved_oxygen": {"min": 4, "critical_min": 3},
     "ph": {"min": 6.5, "max": 8.5, "critical_min": 6, "critical_max": 9},
+    # Valeurs numériques héritées du cahier §5, mais NON applicables telles
+    # quelles (D2, reports/validations/jalon-1.md) : `ammonia`/`nitrate`
+    # proviennent de capteurs de gaz suspendus au-dessus de l'eau, pas de
+    # sondes immergées (ADR-009 — ce n'était pas une question d'unité non
+    # tranchée, l'unité mg/L est confirmée). Ne jamais lire ces deux entrées
+    # comme des seuils absolus : utiliser `get_applicable_thresholds()`
+    # ci-dessous, qui les exclut automatiquement via `SENSOR_TYPES`.
     "ammonia": {"max": 0.05, "critical_max": 0.1},
-    "nitrate": {"max": 50, "critical_max": 100},        # unité non tranchée — décision A1 (docs/11)
+    "nitrate": {"max": 50, "critical_max": 100},
     "turbidity": {"max": None, "critical_max": None},   # à définir après exploration — Jalon 2 (docs/11)
 }
 
@@ -88,15 +106,174 @@ THRESHOLDS = {
 TEMPERATURE_BOUNDS = {"min": 0, "max": 40}   # °C — docs/01 anomalie 1
 PH_BOUNDS = {"min": 0, "max": 14}            # docs/01 anomalie 2
 
-# Décisions ouvertes — ne pas deviner de valeur avant l'ADR correspondant.
-AMMONIA_BOUNDS = None            # décision ouverte — ADR-003 (docs/11) : unité à trancher avant toute borne
-DISSOLVED_OXYGEN_BOUNDS = None   # décision ouverte — A1/A2 (docs/11) : unité + borne physique (max observé 41)
-NITRATE_BOUNDS = None            # décision ouverte — A1/A2 (docs/11) : unité à trancher avant toute borne
-MAX_INTERPOLATION_GAP = None     # décision ouverte — docs/11 : trou max interpolable, dépend du fuseau/de la fréquence
-RESAMPLING_FREQUENCY = None      # décision ouverte — docs/01 "Décisions à prendre" : fréquence de ré-échantillonnage
+# ADR-003 (accepté) + ADR-010 (accepté) : au-delà de 5, valeur exclue par
+# seuillage de plausibilité aquacole — marquée hors borne puis imputée
+# comme les autres variables bornées. Correction du 2026-09-18 (D1,
+# reports/validations/jalon-1.md) : ce sous-ensemble n'est PAS un plateau de
+# valeur unique répétée (contrairement à la description initiale de
+# l'ADR-003) — c'est un continuum de 1 838 valeurs distinctes (5,00082 à
+# 4,27e11, médiane 127,87), voir reports/analyse-donnees-jalon1.md §4
+# corrigé. Usage en modélisation : indicateur relatif uniquement (ADR-009 —
+# capteur de gaz MQ137 suspendu au-dessus de l'eau, pas une concentration
+# dissoute) ; cette borne sert au nettoyage par seuillage, pas à un seuil
+# aquacole absolu.
+AMMONIA_BOUNDS = {"max": 5}
+
+# ADR-010 (accepté, y compris pour cette borne — confirmation humaine du
+# 2026-09-18, J-20260918-021/022) : borne haute DÉFINITIVE, 15 mg/L, retenue
+# parmi les trois candidates chiffrées (8 mg/L = 45,48 % du fichier au-delà ;
+# 15 mg/L = 26,00 % ; 20 mg/L = 21,41 % — reports/analyse-donnees-jalon1.md
+# §2). Les deux alternatives sont écartées.
+DISSOLVED_OXYGEN_BOUNDS = {"max": 15}
+
+# ADR-009 (accepté) : Nitrate provient d'un capteur de gaz (MQ135) suspendu
+# au-dessus de l'eau, pas d'une sonde immergée — ce n'est pas une valeur en
+# attente d'arbitrage (contrairement à l'ancien A1/A2) mais une décision
+# durable : aucune borne physique absolue de nettoyage ne s'applique à cette
+# colonne (nature de la mesure, pas un artefact ponctuel à filtrer).
+NITRATE_BOUNDS = None
+
+# ADR-010 (accepté) : trou temporel maximal interpolable. Au-delà, la valeur
+# reste manquante et marquée (pas d'imputation) — conséquence chiffrée : les
+# 36 jours calendaires entiers sans aucun relevé (sur 117 jours de l'étendue,
+# reports/analyse-donnees-jalon1.md §8) resteront entièrement manquants.
+# Chaîne compatible `pandas.Timedelta`, même convention que
+# `ROLLING_WINDOW_DEFAULT` ci-dessous.
+MAX_INTERPOLATION_GAP = "1h"
+
+# Décision ouverte pour l'implémentation (Jalon 2 seulement) — la fréquence
+# elle-même est tranchée par l'ADR-010 (horaire), mais son application
+# (`src/features.py::resample_hourly`) n'est pas dans le périmètre du
+# nettoyage (Jalon 1) : ne pas l'exploiter avant l'implémentation réelle.
+RESAMPLING_FREQUENCY = None
 
 # Fenêtre glissante par défaut (signature `add_rolling_features`, docs/03).
 ROLLING_WINDOW_DEFAULT = "1h"
+
+# Structure déclarant, pour chaque variable de qualité d'eau, le type de
+# capteur réel (ADR-009, article source Udanor et al.) et l'applicabilité
+# des seuils aquacoles absolus — évite d'appliquer un seuil du cahier des
+# charges §5 à une mesure de gaz suspendu (`ammonia`, `nitrate`). Référence
+# les bornes déjà définies ci-dessus (pas de duplication de valeur). Clé =
+# nom de colonne brut (`config.RAW_COLUMNS`) ; `label` = nom court sans
+# unité utilisé pour les colonnes de marquage `<label>_imputed` /
+# `<label>_missing` (docs/03 — voir `src/ingestion.py::clean_data` pour la
+# distinction entre les deux) ; `threshold_key` = clé correspondante dans
+# `THRESHOLDS` ci-dessus (utilisée par `get_applicable_thresholds()`) ;
+# `absolute_thresholds_applicable` : `True` (sonde immergée, seuils du
+# cahier §5 applicables), `False` (capteur de gaz, usage relatif
+# uniquement) ou `None` (non tranché, ex. turbidité — seuil Jalon 2) ;
+# `note` = texte de contexte inclus tel quel dans `reports/cleaning_report.json`
+# par colonne (construit ici, jamais par comparaison à un nom de colonne en
+# dur dans `src/ingestion.py` — D8, reports/validations/jalon-1.md), ou
+# `None` si aucune note spécifique n'est nécessaire.
+SENSOR_TYPES = {
+    "Temperature (C)": {
+        "label": "Temperature",
+        "sensor": "immersed",
+        "bounds": TEMPERATURE_BOUNDS,
+        "threshold_key": "temperature",
+        "absolute_thresholds_applicable": True,
+        "note": None,
+    },
+    "PH": {
+        "label": "PH",
+        "sensor": "immersed",
+        "bounds": PH_BOUNDS,
+        "threshold_key": "ph",
+        "absolute_thresholds_applicable": True,
+        "note": None,
+    },
+    "Dissolved Oxygen(g/ml)": {
+        "label": "Dissolved Oxygen",
+        "sensor": "immersed",
+        "bounds": DISSOLVED_OXYGEN_BOUNDS,
+        "threshold_key": "dissolved_oxygen",
+        "absolute_thresholds_applicable": True,
+        # Construite depuis DISSOLVED_OXYGEN_BOUNDS lui-même (pas de valeur
+        # dupliquée en dur, D8) : si la borne change, la note suit.
+        "note": (
+            f"ADR-010 : borne haute définitive {DISSOLVED_OXYGEN_BOUNDS['max']} "
+            "mg/L (confirmée par décision humaine le 2026-09-18), retenue "
+            "parmi les candidates 8 / 15 / 20 mg/L."
+        ),
+    },
+    "Ammonia(g/ml)": {
+        "label": "Ammonia",
+        "sensor": "gas",
+        "bounds": AMMONIA_BOUNDS,
+        "threshold_key": "ammonia",
+        "absolute_thresholds_applicable": False,
+        # Construite depuis AMMONIA_BOUNDS (D8) ; texte corrigé le
+        # 2026-09-18 (D1) : continuum de valeurs, pas un plateau constant.
+        "note": (
+            f"ADR-003 : au-delà de {AMMONIA_BOUNDS['max']}, valeur exclue par "
+            "seuillage de plausibilité aquacole (continuum de 1 838 valeurs "
+            "distinctes, pas un code d'erreur unique — voir "
+            "reports/analyse-donnees-jalon1.md §4, corrigé le 2026-09-18). "
+            "Usage relatif en modélisation (ADR-009, capteur de gaz)."
+        ),
+    },
+    "Nitrate(g/ml)": {
+        "label": "Nitrate",
+        "sensor": "gas",
+        "bounds": NITRATE_BOUNDS,
+        "threshold_key": "nitrate",
+        "absolute_thresholds_applicable": False,
+        "note": (
+            "ADR-009 : capteur de gaz (MQ135) suspendu au-dessus de l'eau — "
+            "aucune borne absolue appliquée, colonne non modifiée par le "
+            "nettoyage."
+        ),
+    },
+    "Turbidity(NTU)": {
+        "label": "Turbidity",
+        "sensor": "immersed",
+        "bounds": None,  # seuil à définir après exploration — Jalon 2 (docs/11)
+        "threshold_key": "turbidity",
+        "absolute_thresholds_applicable": None,
+        "note": (
+            "Seuil non tranché (décision ouverte, Jalon 2) — colonne non "
+            "modifiée par le nettoyage."
+        ),
+    },
+}
+
+
+def get_applicable_thresholds() -> dict[str, dict]:
+    """Sous-ensemble de `THRESHOLDS` dont les seuils absolus sont réellement
+    applicables au paramètre (D2, `reports/validations/jalon-1.md`).
+
+    Sortie : dict `{clé_threshold: bornes}`, restreint aux paramètres dont
+    `SENSOR_TYPES[...]["absolute_thresholds_applicable"] is True` (sondes
+    immergées — température, pH, oxygène dissous). Accès protégé plutôt que
+    seulement documenté : contrairement à une lecture directe de
+    `THRESHOLDS`, cette fonction ne peut **jamais** renvoyer de seuil pour
+    `ammonia`/`nitrate` (capteurs de gaz, ADR-009) ni pour `turbidity`
+    (décision non tranchée), même si `THRESHOLDS` contient une valeur
+    numérique héritée pour ces clés — un appelant qui l'utilise ne peut pas
+    appliquer par erreur un seuil aquacole absolu à une mesure de gaz.
+    """
+    return {
+        meta["threshold_key"]: THRESHOLDS[meta["threshold_key"]]
+        for meta in SENSOR_TYPES.values()
+        if meta["absolute_thresholds_applicable"] is True
+    }
+
+
+# Colonnes brutes ni bornées (SENSOR_TYPES ci-dessus) ni reconstruites
+# (GROWTH_COLUMNS ci-dessus) ni l'horodatage (TIMESTAMP_COLUMN) : identifiant
+# technique et métadonnée constante du bac. Non nettoyées par des bornes
+# physiques ; documentées ici (au lieu d'un littéral dans `src/ingestion.py`)
+# pour que `clean_data` couvre les 11 colonnes brutes dans son rapport (D6,
+# reports/validations/jalon-1.md).
+OTHER_RAW_COLUMNS = {
+    "entry_id": "Identifiant séquentiel du relevé, non concerné par le nettoyage physique.",
+    "Population": (
+        "Métadonnée constante du bac (docs/01 anomalie 4), pas une variable "
+        "dynamique de qualité d'eau — non nettoyée."
+    ),
+}
 
 # =====================================================================
 # Modèles — propriétaire : ml-engineer (Jalon 3)
