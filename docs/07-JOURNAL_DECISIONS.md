@@ -49,19 +49,21 @@ Format : `## ADR-XXX — Titre` / Statut / Contexte / Décision / Alternatives e
 
 ## ADR-003 — Traitement de la variable Ammonia
 
-**Statut :** Proposé — à trancher au Jalon 1
+**Statut :** Accepté (2026-09-18)
 
 **Contexte :** la colonne `Ammonia(g/ml)` contient des valeurs aberrantes extrêmes (jusqu'à ~4,27 × 10^11), incompatibles avec toute plage réaliste en aquaculture.
 
-**Décision :** [À TRANCHER — voir `01-DATA_DICTIONARY.md` section "Décisions à prendre"] Option recommandée : exclure la variable brute du modèle après documentation de l'anomalie, plutôt que de tenter une correction d'échelle non justifiée scientifiquement.
+**Décision :** ammoniac **seuillé à 5** : les valeurs strictement supérieures à 5 (27 560 relevés, soit 33,18 % des 83 074 valeurs non manquantes) sont marquées comme artefact de capteur et traitées comme valeur manquante — ce sous-ensemble est en réalité un plateau de valeurs strictement identiques à 4,27 × 10¹¹ (les 20 valeurs les plus extrêmes échantillonnées sont toutes égales), même nature qu'un code d'erreur constant que la valeur -127 °C déjà identifiée sur la température (`docs/01`, anomalie 1). Les 66,82 % restants (55 514 valeurs non manquantes) sont **conservés** : distribution resserrée et plausible (min 0,00677, q25 0,45842, médiane 0,45842, p99 4,49651, max 4,98184, écart-type 0,81956).
 
 **Alternatives envisagées :**
 - Correction d'échelle par un facteur supposé (risqué, non vérifiable)
-- Seuillage strict + traitement comme les autres variables (perte d'information potentiellement importante si la majorité des valeurs sont aberrantes)
+- Exclusion totale de la variable (perte de l'information réelle contenue dans les 66,82 % de valeurs plausibles)
 
-**Justification :** [à compléter une fois la distribution réelle de la variable analysée après nettoyage — à rapprocher de la question des unités, `01-DATA_DICTIONARY.md` anomalie 7]
+**Justification :** un seuillage à 5 isole un artefact clairement identifiable (valeur constante répétée, non une distribution continue) sans perdre l'information de la majorité des relevés, contrairement à l'exclusion totale. Reste soumis à la question des unités et de la nature du capteur (ADR-009) : même conservée, la variable ammoniac est utilisée comme **indicateur relatif** (capteur de gaz, pas une concentration dissoute), pas avec les seuils absolus 0,05/0,1 mg/L du cahier des charges §5. Chiffres : `reports/analyse-donnees-jalon1.md`, §4.
 
-**Date :** à trancher au Jalon 1
+**Traçabilité :** J-20260918-014, J-20260918-016 · Jalon 1 · risque R3
+
+**Date :** proposé le 2026-09-15 · accepté le 2026-09-18 (décision humaine G1, transmise par l'orchestrateur — J-20260918-016)
 
 ---
 
