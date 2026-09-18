@@ -39,7 +39,7 @@ Journal: J-AAAAMMJJ-NNN[, J-…]
 ```
 
 - **Types** : `feat` (fonctionnalité) · `fix` (correction) · `docs` (documentation) · `test` (tests seuls) · `refactor` (sans changement de comportement) · `perf` · `build` (dépendances, `requirements.txt`) · `ci` · `chore` (structure, configuration, gouvernance) · `revert`. Changement incompatible (schéma de config, format de sortie) : `feat!` + ligne `BREAKING CHANGE: …` dans le corps.
-- **Portées** alignées sur les modules : `ingestion`, `features`, `models`, `decision`, `pipeline`, `dashboard`, `config`, `tests`, `deps` ; documentation : `adr`, `risques`, `suivi`, `cadrage`, `readme` ; gouvernance : `gouvernance`, `git`, `tracabilite`, `structure`.
+- **Portées** alignées sur les modules : `ingestion`, `features`, `models`, `decision`, `pipeline`, `dashboard`, `config`, `tests`, `deps` ; documentation : `adr`, `risques`, `suivi`, `cadrage`, `readme`, `analyse` ; gouvernance : `gouvernance`, `git`, `tracabilite`, `structure`.
 - **Résumé** : en français, à l'impératif, minuscule initiale, ≤ 72 caractères, sans point final (ex. `feat(ingestion): borner température et pH selon ADR-008`).
 - **Corps** : lignes ≤ 72 caractères ; explique le pourquoi et les conséquences, pas le diff ligne à ligne.
 - **Trailers** `Agent`, `Jalon`, `Journal` obligatoires ; `Refs` dès qu'un ADR, un risque ou une section de spec est concerné.
