@@ -204,6 +204,70 @@ Format : `## ADR-XXX — Titre` / Statut / Contexte / Décision / Alternatives e
 
 ---
 
+## ADR-009 — Unités des colonnes et nature réelle des capteurs
+
+**Statut :** Accepté (2026-09-18)
+
+**Contexte :** l'en-tête du CSV Kaggle annonce `g/ml` pour `Dissolved Oxygen`, `Ammonia` et `Nitrate`, incompatible avec les valeurs observées (`docs/01`, anomalie 7) et avec les seuils du cahier des charges §5 (mg/L). L'analyse factuelle du data-engineer (`reports/analyse-donnees-jalon1.md`, §1) montre qu'aucun facteur d'échelle simple ne fait rentrer les trois colonnes dans les plages attendues, et que les seuils du cahier appliqués tels quels classeraient le nitrate « critique » sur 99,98 % du cycle. L'article source du dataset a été consulté (`docs/AquaponicsDatapaper.pdf` — Udanor, Ossai, Nweke, Ogbuokiri, Eneh, *Data in Brief* 43 (2022) 108400) : sa Table 1 déclare les unités **mg/l** pour les trois colonnes ; il précise que l'ammoniac est mesuré par un « Ammonia detection sensor NH3 gas sensor module MQ137 » et le nitrate par un « Nitrate detection sensor NO3 gas sensor module MQ135 », tous deux décrits comme « suspended above the pond water » ; l'oxygène dissous provient d'une sonde immergée DFRobot, en mg/l.
+
+**Décision :**
+- L'unité réelle des trois colonnes est **mg/L** ; l'en-tête `g/ml` du CSV Kaggle est une **erreur d'étiquetage** — aucune conversion numérique n'est appliquée aux valeurs.
+- `Ammonia` et `Nitrate` proviennent de **capteurs de gaz suspendus au-dessus de l'eau** (MQ137, MQ135) : ils ne mesurent pas une concentration dissoute dans l'eau, contrairement à ce que leur nom de colonne suggère. En conséquence, **aucun seuil aquacole absolu** (cahier des charges §5) ne leur est appliqué ; elles sont utilisées comme **indicateurs relatifs** (tendance, écart à la moyenne du cycle, ruptures) dans les modules suivants.
+- `Temperature`, `PH` et `Dissolved Oxygen` proviennent de sondes **immergées** : les seuils du cahier des charges §5 leur restent applicables tels quels.
+
+**Alternatives envisagées :**
+- Exclure entièrement `Ammonia` et `Nitrate` du pipeline — écarté : la partie exploitable de l'ammoniac après seuillage (ADR-003, 66,82 % des valeurs) et la tendance croissante plausible du nitrate (`reports/analyse-donnees-jalon1.md`, §1.3) contiennent de l'information réutilisable en indicateur relatif.
+- Appliquer les seuils absolus du cahier des charges à toutes les colonnes sans distinction — écarté : classerait le nitrate « critique » en continu sur 99,98 % du cycle (`reports/analyse-donnees-jalon1.md`, §3), non exploitable pour un moteur de décision ni démontrable.
+
+**Justification :** l'article source est la seule preuve directement vérifiable de l'unité déclarée par les auteurs du dataset ; la description physique des capteurs (« suspended above the pond water ») explique directement pourquoi les valeurs d'ammoniac et de nitrate sont incompatibles avec des concentrations dissoutes classiques, sans recourir à une hypothèse de facteur d'échelle non vérifiable.
+
+**Conséquences :**
+- Limite majeure à exposer explicitement dans le mémoire : deux des six variables de qualité d'eau ne mesurent pas ce que leur nom suggère.
+- `docs/06-ETAT_DE_L_ART.md` à compléter au moment de la rédaction du mémoire avec cette limite et sa source.
+- Le modèle de risque du Jalon 3 doit être construit en tenant compte de cette distinction (features relatives pour ammoniac/nitrate, seuils absolus pour température/pH/DO) — `docs/03`, `src/features.py`, `src/models/`.
+- Précise, sans la modifier autrement, la table `THRESHOLDS` de `src/config.py` : les clés `ammonia` et `nitrate` restent présentes mais ne sont plus interprétées comme des seuils aquacoles absolus.
+
+**Traçabilité :** J-20260918-014, J-20260918-015, J-20260918-016 · Jalon 1 · risques R3, R10 et nouveau risque de validité des capteurs de gaz
+
+**Date :** proposé le 2026-09-18 · accepté le 2026-09-18 (décision humaine G1 : « Distinguer par capteur », rapportée par l'orchestrateur — J-20260918-016)
+
+---
+
+## ADR-010 — Bornes de nettoyage, fuseau horaire et ré-échantillonnage
+
+**Statut :** Accepté (2026-09-18) — y compris la borne haute d'oxygène dissous, confirmée par l'humain le 2026-09-18 (J-20260918-021 : « garde 15 »)
+
+**Contexte :** l'analyse factuelle (`reports/analyse-donnees-jalon1.md`) fournit les chiffres nécessaires pour trancher les bornes de nettoyage, le fuseau horaire et la stratégie temporelle, décisions ouvertes de `docs/11-TABLEAU_DE_BORD.md` bloquantes pour le Jalon 1.
+
+**Décision :**
+- **Température** : bornes physiques **[0, 40] °C** (déjà documentées, `docs/01` anomalie 1) ; **alerte thermique déclenchée sur la plage critique** [20, 35] °C (0,00 % des relevés hors de cette plage), et non sur la plage optimale [26, 32] °C (95,79 % des relevés seraient sous 26 °C, ce qui déclencherait une alerte quasi permanente) — tranche le constat A3.
+- **pH** : bornes physiques **[0, 14]** ; resserrement à une plage plus réaliste pour l'aquaculture laissé à discuter au Jalon 2, sur la base des 185 relevés hors [4, 10] déjà chiffrés (`reports/analyse-donnees-jalon1.md`, §6).
+- **Oxygène dissous — borne haute : 15 mg/L, définitive** (confirmée par l'humain le 2026-09-18, J-20260918-021). Conséquence chiffrée : 21 614 relevés, soit **26,00 % du fichier**, marqués hors borne physique et traités comme les autres valeurs hors borne (nettoyage/interpolation selon la règle générale).
+- **Ammoniac** : borne de nettoyage **5** (voir ADR-003, déjà accepté).
+- **Nitrate** : **pas de borne physique absolue** — usage relatif uniquement, cohérent avec l'ADR-009 (capteur de gaz).
+- **Fuseau horaire** : le suffixe « CET » est retiré de `created_at`, **sans conversion** ; l'horodatage est conservé tel quel. Les données ne permettent pas de trancher entre « CET » littéral et l'heure locale du Nigeria (WAT), les deux hypothèses partageant le même décalage UTC+1 (`reports/analyse-donnees-jalon1.md`, §9).
+- **Limite d'interpolation** : trou maximal interpolable **1 heure** ; au-delà, la valeur reste **manquante et marquée** (pas d'imputation). Conséquence chiffrée : les 36 jours calendaires entiers sans aucun relevé (sur 117 jours de l'étendue) resteront entièrement manquants.
+- **Ré-échantillonnage** : fréquence **horaire**, appliquée au Jalon 2 dans `src/features.py` (`resample_hourly`) — 48,69 % de créneaux horaires vides, 58,09 relevés bruts en moyenne par créneau non vide.
+
+**Alternatives envisagées :**
+- Borne DO à 8 mg/L (saturation eau douce sans marge) — écartée : marquerait 45,48 % du fichier (37 802 relevés), jugé trop large.
+- Borne DO à 20 mg/L (marge très généreuse) — écartée : ne marque que 21,41 % du fichier (17 796 relevés) mais laisserait passer une part d'un régime de capteur déjà identifié comme distinct (épisode du 30/07-05/08, `reports/analyse-donnees-jalon1.md`, §11).
+- Interpolation sans limite (imputation de tous les trous) — écartée : imputerait des jours entiers sans aucune mesure réelle, contraire à la règle de ne jamais imputer au-delà d'un trou raisonnable.
+- Ré-échantillonnage à la minute ou à 5 minutes — écarté : respectivement 74,63 % et 61,34 % de bins vides.
+
+**Justification :** chaque valeur retenue s'appuie sur un chiffre vérifié du rapport d'analyse, pas sur une estimation ; la plage critique de température évite une alerte permanente non exploitable pour la démonstration (R12) ; la limite d'interpolation à 1 h respecte la règle de ne pas deviner de valeur sur un trou de plusieurs jours ; le ré-échantillonnage horaire est le meilleur compromis observé entre volume de bins vides et densité de données par bin.
+
+**Conséquences :**
+- `src/config.py` (data-engineer) : `AMMONIA_BOUNDS = 5` (ADR-003) ; `DISSOLVED_OXYGEN_BOUNDS` = **15** (borne haute, définitive) — le commentaire « provisoire » est à retirer du code ; `NITRATE_BOUNDS` reste sans borne absolue ; `MAX_INTERPOLATION_GAP` = 1 h ; `RESAMPLING_FREQUENCY` = horaire.
+- Le data-engineer implémente le nettoyage avec l'ensemble de ces valeurs, plus aucune n'étant en attente.
+- `docs/01-DATA_DICTIONARY.md` : statut des anomalies 7 à 11 mis à jour (toutes tranchées).
+
+**Traçabilité :** J-20260918-014, J-20260918-016, J-20260918-021 · Jalon 1 · risques R1 (marge), R9, R10, R12
+
+**Date :** proposé le 2026-09-18 · accepté le 2026-09-18 (décision humaine G1, rapportée par l'orchestrateur — J-20260918-016 ; borne haute d'oxygène dissous confirmée le 2026-09-18, J-20260918-021 : « garde 15 »)
+
+---
+
 ## Template pour les prochaines décisions
 
 ```
