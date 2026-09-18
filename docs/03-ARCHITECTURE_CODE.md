@@ -66,8 +66,8 @@ Source unique des constantes du projet (chemins, schéma, seuils, bornes de nett
 Structure réelle, par section et agent propriétaire :
 
 - **Chemins** (data-engineer) — construits depuis `PROJECT_ROOT = Path(__file__).resolve().parents[1]` : `RAW_DATA_PATH`, `PROCESSED_DATA_PATH`, `REPORTS_DIR`, `FIGURES_DIR`, `CLEANING_REPORT_PATH`, `MODELS_DIR`, `LOGS_DIR`, `DECISIONS_LOG_PATH`.
-- **Schéma brut attendu** — `RAW_COLUMNS` (les 11 colonnes exactes de `IoTpond1.csv`, `docs/01-DATA_DICTIONARY.md`, un écart au chargement doit lever une exception explicite) ; `TIMESTAMP_COLUMN = "created_at"` ; `TIMESTAMP_SUFFIX = " CET"` (suffixe à retirer avant parsing — fuseau horaire = décision ouverte, `docs/11`).
-- **Seuils scientifiques** (`THRESHOLDS`, commun à tous les agents, tout changement exige un ADR) :
+- **Schéma brut attendu** — `RAW_COLUMNS` (les 11 colonnes exactes de `IoTpond1.csv`, `docs/01-DATA_DICTIONARY.md`, un écart au chargement doit lever une exception explicite) ; `TIMESTAMP_COLUMN = "created_at"` ; `TIMESTAMP_SUFFIX = " CET"` (suffixe retiré avant parsing, **sans conversion de fuseau**, ADR-010) ; `GROWTH_COLUMNS` (dict colonne brute → nom court sans unité, ex. `"Fish_Weight(g)": "Fish_Weight"`, utilisé par `rebuild_growth_curve` pour nommer les colonnes `<clé>_non_monotonic`).
+- **Seuils scientifiques** (`THRESHOLDS`, commun à tous les agents, tout changement exige un ADR — inchangé depuis le cadrage) :
 
 ```python
 THRESHOLDS = {
@@ -75,17 +75,18 @@ THRESHOLDS = {
     "dissolved_oxygen": {"min": 4, "critical_min": 3},
     "ph": {"min": 6.5, "max": 8.5, "critical_min": 6, "critical_max": 9},
     "ammonia": {"max": 0.05, "critical_max": 0.1},
-    "nitrate": {"max": 50, "critical_max": 100},        # unité non tranchée — décision A1 (docs/11)
+    "nitrate": {"max": 50, "critical_max": 100},        # capteur de gaz, usage relatif — ADR-009
     "turbidity": {"max": None, "critical_max": None},   # à définir après exploration — Jalon 2 (docs/11)
 }
 ```
 
-- **Nettoyage** (data-engineer, Jalon 1) — bornes physiques déjà documentées : `TEMPERATURE_BOUNDS = {"min": 0, "max": 40}` et `PH_BOUNDS = {"min": 0, "max": 14}` (`docs/01`, anomalies 1-2). Décisions ouvertes, à `None` tant que l'ADR correspondant n'est pas accepté : `AMMONIA_BOUNDS` (ADR-003), `DISSOLVED_OXYGEN_BOUNDS` (A1/A2), `NITRATE_BOUNDS` (A1/A2), `MAX_INTERPOLATION_GAP` (fuseau horaire / fréquence), `RESAMPLING_FREQUENCY`. `ROLLING_WINDOW_DEFAULT = "1h"` (valeur par défaut de la fenêtre glissante, signature `add_rolling_features`).
+- **Nettoyage** (data-engineer, Jalon 1 — toutes les bornes tranchées le 2026-09-18) : `TEMPERATURE_BOUNDS = {"min": 0, "max": 40}` et `PH_BOUNDS = {"min": 0, "max": 14}` (`docs/01`, anomalies 1-2) ; `AMMONIA_BOUNDS = {"max": 5}` (ADR-003 — artefact de capteur au-delà, traité au nettoyage ; la variable reste ensuite un indicateur relatif, ADR-009) ; `DISSOLVED_OXYGEN_BOUNDS = {"max": 15}` (ADR-010, borne haute **définitive**, confirmée par l'humain le 2026-09-18 — 26,00 % du fichier au-delà, alternatives 8 et 20 mg/L écartées) ; `NITRATE_BOUNDS = None` (décision **durable**, pas ouverte : capteur de gaz, ADR-009, pas de borne physique absolue) ; `MAX_INTERPOLATION_GAP = "1h"` (ADR-010, trou max interpolable) ; `RESAMPLING_FREQUENCY = None` (fréquence tranchée — horaire, ADR-010 — mais application différée au Jalon 2 dans `features.py`, ne pas exploiter avant). `ROLLING_WINDOW_DEFAULT = "1h"` (valeur par défaut de la fenêtre glissante, signature `add_rolling_features`).
+- **`SENSOR_TYPES`** (data-engineer, ADR-009) — dict clé = nom de colonne brut (`config.RAW_COLUMNS`), déclarant pour chaque variable de qualité d'eau : `label` (nom court, pour les colonnes de marquage `<label>_imputed`), `sensor` (`"immersed"` ou `"gas"`), `bounds` (référence à la borne définie ci-dessus, sans duplication de valeur), `absolute_thresholds_applicable` (`True` pour température/pH/oxygène dissous — sondes immergées, seuils du cahier §5 applicables ; `False` pour ammoniac/nitrate — capteurs de gaz, usage relatif uniquement ; `None` pour la turbidité, non tranché avant le Jalon 2).
 - **Modèles** (ml-engineer, Jalon 3) — `RANDOM_STATE = 42` (confirmée, réserve R5 : graine arbitraire mais fixe, sans portée scientifique, à passer explicitement à tout composant aléatoire — voir le commentaire justificatif dans `src/config.py`) ; `RISK_CLASSES = ("normal", "vigilance", "critique")` (`docs/02` §4.1) ; `TRAIN_FRACTION = 2 / 3` (split temporel — 2/3 premiers du cycle pour l'entraînement, jamais de mélange aléatoire, `docs/02` §4.2).
 - **Moteur de décision** (automation-engineer, Jalon 4) — section réservée : aucune constante avant le Jalon 4 (les règles déclaratives de `docs/02` §5 y seront ajoutées).
 - **Dashboard** (dashboard-developer, Jalon 5) — section réservée : aucune constante avant le Jalon 5.
 
-*(Extrait `THRESHOLDS` identique au code réel de `src/config.py` au 2026-09-16 — voir aussi `01-DATA_DICTIONARY.md`.)*
+*(Extrait `THRESHOLDS` identique au code réel de `src/config.py` au 2026-09-18 — voir aussi `01-DATA_DICTIONARY.md`. `SENSOR_TYPES` déclare l'applicabilité des seuils sans l'imposer techniquement au code appelant — voir réserve D2 du rapport `reports/validations/jalon-1.md`, en cours de traitement par le data-engineer.)*
 
 ## `src/ingestion.py`
 
