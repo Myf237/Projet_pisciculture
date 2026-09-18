@@ -270,6 +270,37 @@ Format : `## ADR-XXX — Titre` / Statut / Contexte / Décision / Alternatives e
 
 ---
 
+## ADR-011 — Conservation du signal brut, plage de pH et traitement de la turbidité
+
+**Statut :** Accepté (2026-09-18)
+
+**Contexte :** l'exploration du Jalon 2 (data-engineer, J-20260918-039) a mis en évidence une conséquence non anticipée de la borne haute d'oxygène dissous à 15 mg/L (ADR-010, confirmée par l'humain le 2026-09-18) : l'intégralité de l'épisode 1 (plateau brut 36-41 mg/L, du 30/07/2021 au 05/08/2021, 13 422 lignes) est marquée `Dissolved Oxygen_missing=True` dans `data/processed/pond1_clean.csv` — le trou qui en résulte (environ 6 jours) dépasse `MAX_INTERPOLATION_GAP` (1 h), donc aucune valeur de cet épisode ne survit au nettoyage (constat vérifié J-20260918-041). C'est précisément l'anomalie que le projet cherche à détecter (Jalon 3) et à démontrer (Jalon 5). Pour l'épisode 2, le volet oxygène dissous reste visible dans le fichier nettoyé (valeurs proches de 0, dans les bornes), mais le volet pH ne l'est pas : les 40 relevés bruts de sa fenêtre ont tous un pH négatif, donc hors bornes [0, 14] et marqués manquants. Par ailleurs, un brief de délégation erroné affirmait que les 145 relevés de pH sous 4 étaient tous situés dans la fenêtre du 24/09 au 01/10 ; vérification du data-engineer (corrigée en J-20260918-040) : ils se répartissent en 62 relevés du 15 au 19/09 et 83 du 11 au 13/10, un ensemble disjoint des 40 pH négatifs déjà hors bornes. Enfin, la turbidité sature à 100 NTU sur 56,37 % des relevés (`reports/analyse-donnees-jalon1.md`, addendum daté du Jalon 2), une limite déjà connue du capteur.
+
+**Décision :**
+- **Conservation du signal brut** : la borne de nettoyage de 15 mg/L (ADR-010) reste appliquée à la colonne `Dissolved Oxygen(g/ml)` nettoyée, sans modification de ce comportement. En parallèle, chaque variable bornée de `config.SENSOR_TYPES` (température, pH, oxygène dissous, ammoniac) conserve sa valeur brute d'origine — y compris hors bornes, y compris `NaN` si elle l'était déjà — dans une colonne dédiée `<label>{config.RAW_VALUE_SUFFIX}` (suffixe `"_raw"`, déclaré dans `src/config.py`), jamais imputée ni recalculée depuis la colonne nettoyée. Conséquence mesurée sur l'épisode 1 (13 422 lignes) : la colonne nettoyée ne garde que 368 valeurs d'oxygène dissous, la colonne `Dissolved Oxygen_raw` les 13 422, moyenne 36,47 mg/L (J-20260918-044).
+- **pH** : aucun resserrement de la plage de nettoyage, qui reste [0, 14] (`PH_BOUNDS`, inchangée). Les 145 relevés sous 4 (62 du 15 au 19/09, 83 du 11 au 13/10 — deux fenêtres disjointes de celle du 24/09 au 01/10, contrairement à ce qu'affirmait le brief de délégation initial, corrigé en J-20260918-040) restent visibles dans le fichier nettoyé comme anomalies de capteur, sans être marqués manquants ni imputés. Un filtrage plus strict reste possible au Jalon 3, sur la base de ces chiffres.
+- **Turbidité** : traitée en indicateur relatif, sans seuil absolu — la saturation à 100 NTU sur 56,37 % des relevés est documentée comme une limite du capteur plutôt que comme un état réel du bac.
+
+**Alternatives envisagées :**
+- Supprimer ou relever la borne d'oxygène dissous pour laisser passer l'épisode 1 dans la colonne nettoyée — écarté : reviendrait sur l'ADR-010 (borne déjà confirmée par l'humain) et laisserait des valeurs physiquement discutables (jusqu'à 41 mg/L) contaminer la colonne utilisée pour l'analyse physiologique.
+- Traiter l'oxygène dissous comme les capteurs de gaz (ammoniac, nitrate — sans seuil absolu, ADR-009) — écarté : l'article source (Udanor et al.) confirme une sonde immergée, donc une mesure dissoute réelle, contrairement aux capteurs de gaz suspendus ; supprimer la borne reviendrait à renoncer au nettoyage d'une variable dont la nature de mesure le justifie.
+- Se contenter de détecter l'absence de données (drapeau `_missing` seul, sans conserver la valeur brute) — écarté : un drapeau seul indique qu'une donnée manque mais ne permet pas de montrer la forme de l'anomalie (plateau à 36-41 mg/L) au Jalon 5 ni de l'exploiter en détection au Jalon 3.
+
+**Justification :** la conservation de la valeur brute en colonne parallèle restaure le signal recherché sans renoncer au nettoyage de la colonne principale ni rouvrir une décision déjà tranchée (ADR-010) ; les chiffres mesurés (368 vs 13 422 valeurs, moyenne 36,47 mg/L) montrent que le signal est effectivement récupéré (J-20260918-044). Le maintien de la plage de pH [0, 14] laisse les 145 relevés sous 4 visibles comme matière à décision du Jalon 3, plutôt que de les exclure sur la base d'un brief dont l'erreur de localisation temporelle (corrigée en J-20260918-040) aurait pu orienter à tort un resserrement. L'absence de seuil absolu sur la turbidité suit le même raisonnement déjà retenu pour l'ammoniac et le nitrate (ADR-009) : un seuil sur une variable dont 56,37 % des relevés sont saturés au maximum du capteur déclencherait une alerte non exploitable pour la démonstration.
+
+**Conséquences :**
+- `src/config.py` (data-engineer) : nouvelle constante `RAW_VALUE_SUFFIX = "_raw"` ; `PH_BOUNDS` et le traitement de la turbidité inchangés (aucune borne appliquée à `Turbidity(NTU)`, `SENSOR_TYPES["Turbidity(NTU)"]["bounds"] = None`).
+- Schéma du fichier nettoyé : 23 colonnes (11 brutes + 3 colonnes par variable bornée — `_imputed`, `_missing`, `_raw` — pour température, pH, oxygène dissous, ammoniac), contre 19 avant cette décision ; la taille du fichier nettoyé augmente en conséquence.
+- Le Jalon 3 dispose du signal brut pour la détection et doit choisir explicitement quelle colonne il utilise (nettoyée ou `_raw`) selon l'objectif (analyse physiologique vs détection de dérive de capteur) ; le Jalon 5 peut montrer l'épisode 1 dans le scénario de démonstration.
+- `docs/01-DATA_DICTIONARY.md`, `docs/03-ARCHITECTURE_CODE.md` et `docs/08-REGISTRE_RISQUES.md` (R16) mis à jour en conséquence par le doc-keeper.
+- Ne modifie ni ne réécrit l'ADR-009 ni l'ADR-010 : ADR-011 les complète et les précise, sans changer la borne de 15 mg/L ni la nature des capteurs déjà tranchées.
+
+**Traçabilité :** J-20260918-039, J-20260918-040, J-20260918-041, J-20260918-042, J-20260918-044 · Jalon 2 · risque R16
+
+**Date :** proposé le 2026-09-18 · accepté le 2026-09-18 (décision humaine G1, rapportée par l'orchestrateur — J-20260918-042)
+
+---
+
 ## Template pour les prochaines décisions
 
 ```

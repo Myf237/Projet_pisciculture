@@ -1,14 +1,14 @@
 # Tableau de bord du projet
 
 > État vivant du projet, lu en début de chaque session (`/demarrer-session`) et tenu à jour par l'agent `doc-keeper`.
-> **Dernière mise à jour :** 2026-09-18 — doc-keeper (Jalon 1 VALIDÉ AVEC RÉSERVES, décisions G1 J-20260918-028 consignées, J-20260918-031)
+> **Dernière mise à jour :** 2026-09-18 — doc-keeper (Jalon 1 VALIDÉ et tagué `jalon-1` ; Jalon 2 implémenté, en vérification ; ADR-011 accepté, décisions G1 J-20260918-042 consignées)
 
 ## Situation
 
-- **Phase :** mise en place terminée — pull requests **#1** (merge commit `22d029d`, 2026-09-17T23:13:11Z) et **#2** de levée des réserves (merge commit `f7a123a`, 2026-09-17T23:50:18Z) fusionnées dans `main` par décision humaine (G2). Replanification décidée le 2026-09-18 (**G3**, ADR-008) : démonstration maintenue au **2026-09-23**, Jalons 1 et 2 regroupés au 2026-09-18 (voir `05-TIMELINE.md`).
-- **Jour actuel :** Jour 1 du planning révisé — vendredi 2026-09-18. Branche de travail `feat/jalon-1-donnees-nettoyees`, créée depuis `origin/main`.
-- **Jalon actif :** **Jalon 1** (Données nettoyées et fiables) — toutes les décisions G1 sont tranchées (ADR-003, ADR-009, ADR-010, y compris la borne haute d'oxygène dissous à 15 mg/L, confirmée le 2026-09-18) ; nettoyage implémenté par le data-engineer et vérifié **VALIDÉ AVEC RÉSERVES** par le `qa-validator` (`reports/validations/jalon-1.md`) ; réserves D1-D9 en cours de traitement avant commit et décision G2. Jalon 2 (Exploration) à mener le même jour, juste après.
-- **Avancement :** replanifié (ADR-008) après un jour de retard sur l'ADR-006 (mise en place non comptée comme jalon le 2026-09-17) ; plus aucune marge de planning avant la démonstration du 2026-09-23 (voir `08-REGISTRE_RISQUES.md`, R1).
+- **Phase :** pull requests **#1** (merge commit `22d029d`, 2026-09-17T23:13:11Z), **#2** de levée des réserves (merge commit `f7a123a`, 2026-09-17T23:50:18Z) et **#3** du Jalon 1 (merge commit `700bb26`, tag annoté `jalon-1`) fusionnées dans `main` par décisions humaines (G2). Replanification décidée le 2026-09-18 (**G3**, ADR-008) : démonstration maintenue au **2026-09-23**, Jalons 1 et 2 regroupés au 2026-09-18 (voir `05-TIMELINE.md`).
+- **Jour actuel :** Jour 1 du planning révisé — vendredi 2026-09-18. Branche de travail `feat/jalon-2-exploration-features`, créée depuis `origin/main`.
+- **Jalon actif :** **Jalon 1** (Données nettoyées et fiables) clos — **VALIDÉ** (5 critères `docs/04` conformes, réserves toutes levées, `reports/validations/jalon-1.md` itérations 1-2), fusionné (PR #3, merge commit `700bb26`) et **tagué `jalon-1`**. **Jalon 2** (Exploration validée) implémenté par le data-engineer : `src/features.py` (4 fonctions), notebook d'exploration, conservation du signal brut sur les variables bornées (décisions G1 J-20260918-042, formalisées par **ADR-011**, accepté) ; en attente de vérification par le `qa-validator`.
+- **Avancement :** replanifié (ADR-008) après un jour de retard sur l'ADR-006 (mise en place non comptée comme jalon le 2026-09-17) ; plus aucune marge de planning avant la démonstration du 2026-09-23 (voir `08-REGISTRE_RISQUES.md`, R1). Constat majeur du Jalon 2 (la borne DO rendait l'épisode 1 invisible dans le fichier nettoyé) traité par ADR-011 sans rouvrir l'ADR-010.
 
 ## Jalons
 
@@ -16,8 +16,8 @@ Statuts : À faire · En cours · En vérification · Validé · Validé avec r�
 
 | # | Jalon | Jour prévu | Réalise | Statut | Validé le | Rapport |
 |---|---|---|---|---|---|---|
-| 1 | Données nettoyées et fiables | J1 — 18/09 | data-engineer | En vérification (verdict proposé : Validé avec réserves) | — | `reports/validations/jalon-1.md` |
-| 2 | Exploration validée | J1 — 18/09 | data-engineer | À faire | — | — |
+| 1 | Données nettoyées et fiables | J1 — 18/09 | data-engineer | Validé (tag `jalon-1`) | 2026-09-18 | `reports/validations/jalon-1.md` |
+| 2 | Exploration validée | J1 — 18/09 | data-engineer | En vérification | — | — |
 | 3 | Modèle de détection de risque opérationnel | J2-J3 — 19-20/09 | ml-engineer | À faire | — | — |
 | 4 | Moteur de décision fonctionnel | J4 — 21/09 | automation-engineer | À faire | — | — |
 | 5 | Dashboard démontrable | J5 — 22/09 | dashboard-developer | À faire | — | — |
@@ -36,14 +36,14 @@ Statuts : À faire · En cours · En vérification · Validé · Validé avec r�
 | Pull request **#2** (levée des réserves R1-R7) fusionnée dans `main` (merge commit `f7a123a`, 2026-09-17T23:50:18Z) : https://github.com/Myf237/Projet_pisciculture/pull/2 | Jalon 1 | — | Levé (fusionnée, G2 obtenu, J-20260918-012) |
 | Replanification (Jalon 1 non démarré le 2026-09-17 comme prévu par l'ADR-006) | Jalon 1 | Décision **G3** de l'humain | Levé (ADR-008, démonstration maintenue au 23/09, Jalons 1-2 regroupés au 18/09, J-20260918-012) |
 | GitHub CLI (`gh`) | Jalon « préparation » (ouverture de la PR) | Installation puis connexion interactive | Levé (installé et connecté — compte Myf237, dépôt public, droits admin — J-20260916-024, 027) |
+| Pull request **#3** (Jalon 1, données nettoyées) fusionnée dans `main` (merge commit `700bb26`), tag annoté `jalon-1` posé et poussé : https://github.com/Myf237/Projet_pisciculture/pull/3 | Jalon 2 | — | Levé (fusionnée, G2 obtenu, tag posé, J-20260918-037) |
 
 ## Décisions en attente
 
-Constats de l'analyse de cadrage du 2026-09-16, tranchés le 2026-09-18 par ADR-009 et ADR-010 (détail : `01-DATA_DICTIONARY.md` anomalies 7 à 11, `08-REGISTRE_RISQUES.md` R9, R10, R12, R15). **Plus aucune décision en attente pour le Jalon 1** — la dernière, la borne haute d'oxygène dissous, a été confirmée à 15 mg/L le 2026-09-18 (voir « Décisions prises », ADR-010).
+Constats de l'analyse de cadrage du 2026-09-16, tranchés le 2026-09-18 par ADR-009 et ADR-010 (détail : `01-DATA_DICTIONARY.md` anomalies 7 à 11, `08-REGISTRE_RISQUES.md` R9, R10, R12, R15). **Plus aucune décision en attente pour les Jalons 1 et 2** — la borne haute d'oxygène dissous (ADR-010) et, pour le Jalon 2, le seuil de turbidité et le resserrement du pH (ADR-011 : turbidité en indicateur relatif, pH non resserré, signal brut conservé) sont tous tranchés.
 
 | Réf. | Sujet | Bloque | Piste recommandée (à confirmer — G1) | ADR |
 |---|---|---|---|---|
-| — | Seuil de turbidité (« à définir » dans le cahier des charges) | Jalon 2 | Fixé à partir de l'exploration et d'une source citée | à créer |
 | A4 | Stratégie de labels et d'évaluation (circularité) + cible de rappel de la classe critique (« à définir » au Jalon 3) | Jalon 3 | Baseline « seuils seuls » + anomalies non triviales ; cible de rappel fixée avant entraînement | à créer |
 | A5 | Approche de prédiction de croissance (Random Forest non extrapolant) | Jalon 3 (priorité 2) | Régression simple sur le log du poids, comparée à une baseline naïve | à créer |
 | — | Mécanisme anti-oscillation des actions simulées | Jalon 4 | Hystérésis simple sur les règles à seuil | à créer |
@@ -63,6 +63,7 @@ Constats de l'analyse de cadrage du 2026-09-16, tranchés le 2026-09-18 par ADR-
 | ADR-009 | Unités réelles mg/L (A1) ; ammoniac et nitrate = capteurs de gaz, indicateurs relatifs sans seuil absolu ; température/pH/DO = sondes immergées, seuils du cahier applicables | 2026-09-18 |
 | ADR-010 | Bornes de nettoyage (température, pH, ammoniac, **DO = 15 mg/L définitif**), alerte thermique sur la plage critique (A3), fuseau horaire sans conversion, interpolation max 1 h, ré-échantillonnage horaire | 2026-09-18 |
 | — | **Périmètre de données du Jalon 1 accepté** : 28,00 % d'ammoniac et 15,93 % d'oxygène dissous manquants après nettoyage, 36,96 % de lignes incomplètes, 35,14 % des créneaux horaires avec ammoniac exploitable — accepté en connaissance de cause, à charge pour les Jalons 2-3 de consulter les drapeaux `<label>_imputed` et pour le mémoire de discuter cette couverture (voir R16, `08-REGISTRE_RISQUES.md`) | 2026-09-18 |
+| ADR-011 | Conservation du signal brut (colonnes `<label>_raw`, suffixe `RAW_VALUE_SUFFIX`) pour les 4 variables bornées — restaure l'épisode 1 (368 valeurs nettoyées contre 13 422 en `_raw`, moyenne 36,47 mg/L) ; pH non resserré (`PH_BOUNDS` inchangée, [0, 14]) ; turbidité traitée en indicateur relatif, aucun seuil absolu (saturation 56,37 % à 100 NTU) | 2026-09-18 |
 
 ## Réserves de validation en cours
 
@@ -82,9 +83,8 @@ Rapport `reports/validations/preparation-mise-en-place.md`, itération 2 : verdi
 
 ## Prochaine action
 
-1. **Jalon 1, en vérification** : verdict proposé VALIDÉ AVEC RÉSERVES (`reports/validations/jalon-1.md`) ; réserves D2, D3, D6, D8, D9 (data-engineer) et D7 (point d'entrée de régénération, à attribuer) en cours de traitement, puis commit, pull request et décision **G2** de fusion.
-2. **Jalon 2** le même jour (2026-09-18) : exploration et `features.py`, avec sa propre vérification par le `qa-validator` (rapport distinct de celui du Jalon 1).
-3. Suite du planning révisé (ADR-008, `05-TIMELINE.md`) : Jalon 3 les 19-20/09 (point de bascule le 20/09 pour la prédiction de croissance), Jalon 4 le 21/09, Jalon 5 le 22/09, Jalon 6 le 23/09 (démonstration).
+1. **Jalon 2, en vérification** : implémentation terminée (`src/features.py`, notebook d'exploration, conservation du signal brut — ADR-011) ; vérification indépendante par le `qa-validator` à mener (rapport distinct de celui du Jalon 1), puis commit, pull request et décision **G2** de fusion.
+2. Suite du planning révisé (ADR-008, `05-TIMELINE.md`) : Jalon 3 les 19-20/09 (point de bascule le 20/09 pour la prédiction de croissance), Jalon 4 le 21/09, Jalon 5 le 22/09, Jalon 6 le 23/09 (démonstration).
 
 ## Historique des mises à jour
 
@@ -101,3 +101,4 @@ Rapport `reports/validations/preparation-mise-en-place.md`, itération 2 : verdi
 | 2026-09-18 | doc-keeper | Décisions G1 du Jalon 1 après lecture de l'article source : ADR-009 (unités mg/L, ammoniac/nitrate = capteurs de gaz) et ADR-010 (bornes, alerte thermique sur la plage critique, fuseau sans conversion, interpolation 1 h, ré-échantillonnage horaire) ajoutés aux décisions prises avec ADR-003 ; décisions en attente réduites à la seule borne haute d'oxygène dissous (A2, ADR-010 Proposé) | J-20260918-020 |
 | 2026-09-18 | doc-keeper | Borne haute d'oxygène dissous confirmée à 15 mg/L (ADR-010 entièrement Accepté) ; article source versionné et attribué (`docs/00-INDEX.md`, `docs/01`) ; plus aucune décision en attente pour le Jalon 1 ; prochaine action alignée sur la fin de l'implémentation du nettoyage | J-20260918-022 |
 | 2026-09-18 | doc-keeper | Jalon 1 VALIDÉ AVEC RÉSERVES (`reports/validations/jalon-1.md`) ; correction D5 (contradiction Situation ↔ Décisions en attente) ; décisions G1 du 2026-09-18 consignées : ammoniac reconfirmé (ADR-003), périmètre de données accepté (nouveau risque R16) ; statut du Jalon 1 passé à « En vérification » ; prochaine action alignée sur les réserves D2-D9 puis G2 | J-20260918-031 |
+| 2026-09-18 | doc-keeper | **ADR-011 créé (Accepté)** : conservation du signal brut (`<label>{RAW_VALUE_SUFFIX}`), pH non resserré, turbidité en indicateur relatif (décisions G1 J-20260918-042, après constat J-20260918-039/041 et correction J-20260918-040). `docs/03` : schéma du fichier nettoyé à 23 colonnes, `RESAMPLING_FREQUENCY`/`RAW_VALUE_SUFFIX` renseignés, description réelle des 4 fonctions de `features.py` (compteurs mesuré/imputé/manquant séparés dans `resample_hourly`). `docs/01` : complément sur l'épisode 1 (anomalie 8), nouvelles anomalies 12 (145 pH < 4, distribution corrigée) et 13 (saturation turbidité à 100 NTU sur 56,37 %), checklist turbidité cochée. `docs/08` : R16 précisé (portée atténuée pour la détection, inchangée pour l'analyse physiologique). `docs/11` : Jalon 1 Validé et tagué `jalon-1` (PR #3, merge `700bb26`), Jalon 2 En vérification, décisions en attente soldées pour les Jalons 1-2, ADR-011 ajouté aux décisions prises, prochaine action alignée sur la vérification du Jalon 2 | J-20260918-046 |
