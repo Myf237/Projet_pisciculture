@@ -49,19 +49,23 @@ Format : `## ADR-XXX — Titre` / Statut / Contexte / Décision / Alternatives e
 
 ## ADR-003 — Traitement de la variable Ammonia
 
-**Statut :** Proposé — à trancher au Jalon 1
+**Statut :** Accepté (2026-09-18)
 
 **Contexte :** la colonne `Ammonia(g/ml)` contient des valeurs aberrantes extrêmes (jusqu'à ~4,27 × 10^11), incompatibles avec toute plage réaliste en aquaculture.
 
-**Décision :** [À TRANCHER — voir `01-DATA_DICTIONARY.md` section "Décisions à prendre"] Option recommandée : exclure la variable brute du modèle après documentation de l'anomalie, plutôt que de tenter une correction d'échelle non justifiée scientifiquement.
+**Décision :** ammoniac **seuillé à 5** : les valeurs strictement supérieures à 5 (27 560 relevés, soit 33,18 % des 83 074 valeurs non manquantes) sont marquées comme artefact de capteur et traitées comme valeur manquante — ce sous-ensemble est en réalité un plateau de valeurs strictement identiques à 4,27 × 10¹¹ (les 20 valeurs les plus extrêmes échantillonnées sont toutes égales), même nature qu'un code d'erreur constant que la valeur -127 °C déjà identifiée sur la température (`docs/01`, anomalie 1). Les 66,82 % restants (55 514 valeurs non manquantes) sont **conservés** : distribution resserrée et plausible (min 0,00677, q25 0,45842, médiane 0,45842, p99 4,49651, max 4,98184, écart-type 0,81956).
 
 **Alternatives envisagées :**
 - Correction d'échelle par un facteur supposé (risqué, non vérifiable)
-- Seuillage strict + traitement comme les autres variables (perte d'information potentiellement importante si la majorité des valeurs sont aberrantes)
+- Exclusion totale de la variable (perte de l'information réelle contenue dans les 66,82 % de valeurs plausibles)
 
-**Justification :** [à compléter une fois la distribution réelle de la variable analysée après nettoyage — à rapprocher de la question des unités, `01-DATA_DICTIONARY.md` anomalie 7]
+**Justification :** un seuillage à 5 isole un artefact clairement identifiable (valeur constante répétée, non une distribution continue) sans perdre l'information de la majorité des relevés, contrairement à l'exclusion totale. Reste soumis à la question des unités et de la nature du capteur (ADR-009) : même conservée, la variable ammoniac est utilisée comme **indicateur relatif** (capteur de gaz, pas une concentration dissoute), pas avec les seuils absolus 0,05/0,1 mg/L du cahier des charges §5. Chiffres : `reports/analyse-donnees-jalon1.md`, §4.
 
-**Date :** à trancher au Jalon 1
+**Correction du 2026-09-18 :** la justification ci-dessus décrit à tort les 27 560 relevés supérieurs à 5 comme « un plateau de valeurs strictement identiques à 4,27 × 10¹¹ », assimilable à un code d'erreur constant comme le -127 °C de la température — cette description est **fausse**. Mesure indépendante du `qa-validator` (`reports/validations/jalon-1.md`, défaut D1) : **1 838 valeurs distinctes** parmi les relevés > 5, médiane 127,87, **25 relevés seulement** à la valeur maximale exacte (4,27 × 10¹¹), 3 847 relevés (13,96 %) situés entre 5 et 10 — un **continuum**, pas une constante répétée. Cause : l'analyse initiale (`reports/analyse-donnees-jalon1.md` §4) s'appuyait sur un échantillon de 20 valeurs extrêmes, non représentatif de l'ensemble des 27 560 relevés au-dessus du seuil. La **décision de seuil à 5 reste inchangée** et a été **reconfirmée par l'humain en connaissance de cause** le 2026-09-18 (J-20260918-028), pour deux motifs indépendants de la nature exacte des valeurs écartées : au-delà de 5, aucune valeur n'est compatible avec un bassin viable ; la variable est en tout état de cause utilisée en indicateur relatif, puisqu'elle provient d'un capteur de gaz et non d'une sonde immergée (ADR-009). Traçabilité de la correction : J-20260918-027 (constat de l'information erronée), J-20260918-028 (reconfirmation humaine).
+
+**Traçabilité :** J-20260918-014, J-20260918-016, J-20260918-027, J-20260918-028 · Jalon 1 · risque R3
+
+**Date :** proposé le 2026-09-15 · accepté le 2026-09-18 (décision humaine G1, transmise par l'orchestrateur — J-20260918-016)
 
 ---
 
@@ -118,7 +122,7 @@ Format : `## ADR-XXX — Titre` / Statut / Contexte / Décision / Alternatives e
 
 ## ADR-006 — Référence de planning : `05-TIMELINE.md` fait foi sur le cahier des charges §9
 
-**Statut :** Accepté (2026-09-16)
+**Statut :** Remplacé par ADR-008 (2026-09-18)
 
 **Contexte :** deux plannings divergent. Le cahier des charges (§9) consacre le Jour 1 à la validation du dataset et le Jour 2 à l'ingestion/nettoyage ; `05-TIMELINE.md` regroupe structure du dépôt, ingestion et nettoyage au Jour 1, décalant les étapes suivantes. Les jalons de `04-JALONS_VALIDATION.md` suivent `05`.
 
@@ -172,6 +176,97 @@ Format : `## ADR-XXX — Titre` / Statut / Contexte / Décision / Alternatives e
 **Traçabilité :** J-20260916-014, J-20260916-015 · préparation (avant Jalon 1) · risques R13, R14
 
 **Date :** proposé le 2026-09-16 · accepté le 2026-09-16 (validation humaine explicite, rapportée par l'orchestrateur : « ajouter une règle systémique pour gérer les commits, PR et push en suivant les meilleures règles et conventions alignées avec le projet »)
+
+---
+
+## ADR-008 — Replanification : démonstration maintenue au 2026-09-23
+
+**Statut :** Accepté (2026-09-18)
+
+**Contexte :** la mise en place du dépôt (structure, garde-fous, pull requests) a occupé la journée du 2026-09-17 ; aucun jalon n'a démarré à la date initialement prévue par l'ADR-006 (Jour 1 = 2026-09-17). Le rapport de vérification et la levée des réserves ont occupé la nuit du 17 au 18/09 (PR #1 fusionnée le 2026-09-17T23:13:11Z, PR #2 le 2026-09-17T23:50:18Z). Au 2026-09-18, un jour de retard est constaté sur le planning de l'ADR-006 (`08-REGISTRE_RISQUES.md`, R1).
+
+**Décision :** la démonstration reste fixée au **2026-09-23** ; les Jalons 1 et 2 sont regroupés au 2026-09-18 (nouveau Jour 1) pour rattraper le jour perdu, sans décaler la fin du projet. Nouveau planning : Jour 1 = 18/09 (Jalons 1 et 2) → Jour 6 = 23/09 (Jalon 6, démonstration). Détail complet : `05-TIMELINE.md`.
+
+**Alternatives envisagées :**
+- Décaler la démonstration d'un jour (24/09) — écarté : aucune contrainte ne l'imposait, et la date du 23/09 avait déjà été communiquée comme repère de mémoire ; le retard d'un jour reste rattrapable en regroupant deux jalons déjà proches par nature (nettoyage et exploration reposent sur les mêmes données et le même agent propriétaire).
+- Recalculer l'ensemble du planning à rebours depuis une autre date de soutenance — écarté : aucune autre date n'a été fournie ; solution disproportionnée pour un seul jour de retard.
+
+**Justification :** les Jalons 1 et 2 sont réalisés par le même agent (`data-engineer`) et portent sur les mêmes données ; les regrouper absorbe le retard sans complexifier les jours suivants ni toucher au chemin critique du Jalon 3 (modélisation) ni à la marge de sécurité déjà prévue au Jour 4 initial (règle du Jour 4).
+
+**Conséquences :**
+- La marge de sécurité du planning est supprimée dès le départ : plus aucun jour tampon avant la démonstration du 2026-09-23.
+- Risque R1 (délai) accru : probabilité relevée dans `08-REGISTRE_RISQUES.md`, avec justification.
+- La « règle du Jour 4 » (point de bascule pour couper la prédiction de croissance si retard) s'applique désormais le 2026-09-20 (nouveau Jour 3 du planning révisé) ; le nom de la règle est conservé pour la continuité de traçabilité avec l'ADR-006.
+- Les Jalons 1 et 2 sont vérifiés le même jour, par deux rapports distincts du `qa-validator` (un par jalon), sans les fusionner en une seule vérification.
+- L'ADR-006 n'est pas réécrit : son champ Statut passe à « Remplacé par ADR-008 ».
+
+**Traçabilité :** J-20260918-012 · préparation → Jalon 1 · risque R1
+
+**Date :** proposé le 2026-09-18 · accepté le 2026-09-18 (validation humaine explicite, rapportée par l'orchestrateur : « Tenir la démo du 23/09 »)
+
+---
+
+## ADR-009 — Unités des colonnes et nature réelle des capteurs
+
+**Statut :** Accepté (2026-09-18)
+
+**Contexte :** l'en-tête du CSV Kaggle annonce `g/ml` pour `Dissolved Oxygen`, `Ammonia` et `Nitrate`, incompatible avec les valeurs observées (`docs/01`, anomalie 7) et avec les seuils du cahier des charges §5 (mg/L). L'analyse factuelle du data-engineer (`reports/analyse-donnees-jalon1.md`, §1) montre qu'aucun facteur d'échelle simple ne fait rentrer les trois colonnes dans les plages attendues, et que les seuils du cahier appliqués tels quels classeraient le nitrate « critique » sur 99,98 % du cycle. L'article source du dataset a été consulté (`docs/AquaponicsDatapaper.pdf` — Udanor, Ossai, Nweke, Ogbuokiri, Eneh, *Data in Brief* 43 (2022) 108400) : sa Table 1 déclare les unités **mg/l** pour les trois colonnes ; il précise que l'ammoniac est mesuré par un « Ammonia detection sensor NH3 gas sensor module MQ137 » et le nitrate par un « Nitrate detection sensor NO3 gas sensor module MQ135 », tous deux décrits comme « suspended above the pond water » ; l'oxygène dissous provient d'une sonde immergée DFRobot, en mg/l.
+
+**Décision :**
+- L'unité réelle des trois colonnes est **mg/L** ; l'en-tête `g/ml` du CSV Kaggle est une **erreur d'étiquetage** — aucune conversion numérique n'est appliquée aux valeurs.
+- `Ammonia` et `Nitrate` proviennent de **capteurs de gaz suspendus au-dessus de l'eau** (MQ137, MQ135) : ils ne mesurent pas une concentration dissoute dans l'eau, contrairement à ce que leur nom de colonne suggère. En conséquence, **aucun seuil aquacole absolu** (cahier des charges §5) ne leur est appliqué ; elles sont utilisées comme **indicateurs relatifs** (tendance, écart à la moyenne du cycle, ruptures) dans les modules suivants.
+- `Temperature`, `PH` et `Dissolved Oxygen` proviennent de sondes **immergées** : les seuils du cahier des charges §5 leur restent applicables tels quels.
+
+**Alternatives envisagées :**
+- Exclure entièrement `Ammonia` et `Nitrate` du pipeline — écarté : la partie exploitable de l'ammoniac après seuillage (ADR-003, 66,82 % des valeurs) et la tendance croissante plausible du nitrate (`reports/analyse-donnees-jalon1.md`, §1.3) contiennent de l'information réutilisable en indicateur relatif.
+- Appliquer les seuils absolus du cahier des charges à toutes les colonnes sans distinction — écarté : classerait le nitrate « critique » en continu sur 99,98 % du cycle (`reports/analyse-donnees-jalon1.md`, §3), non exploitable pour un moteur de décision ni démontrable.
+
+**Justification :** l'article source est la seule preuve directement vérifiable de l'unité déclarée par les auteurs du dataset ; la description physique des capteurs (« suspended above the pond water ») explique directement pourquoi les valeurs d'ammoniac et de nitrate sont incompatibles avec des concentrations dissoutes classiques, sans recourir à une hypothèse de facteur d'échelle non vérifiable.
+
+**Conséquences :**
+- Limite majeure à exposer explicitement dans le mémoire : deux des six variables de qualité d'eau ne mesurent pas ce que leur nom suggère.
+- `docs/06-ETAT_DE_L_ART.md` à compléter au moment de la rédaction du mémoire avec cette limite et sa source.
+- Le modèle de risque du Jalon 3 doit être construit en tenant compte de cette distinction (features relatives pour ammoniac/nitrate, seuils absolus pour température/pH/DO) — `docs/03`, `src/features.py`, `src/models/`.
+- Précise, sans la modifier autrement, la table `THRESHOLDS` de `src/config.py` : les clés `ammonia` et `nitrate` restent présentes mais ne sont plus interprétées comme des seuils aquacoles absolus.
+
+**Traçabilité :** J-20260918-014, J-20260918-015, J-20260918-016 · Jalon 1 · risques R3, R10 et nouveau risque de validité des capteurs de gaz
+
+**Date :** proposé le 2026-09-18 · accepté le 2026-09-18 (décision humaine G1 : « Distinguer par capteur », rapportée par l'orchestrateur — J-20260918-016)
+
+---
+
+## ADR-010 — Bornes de nettoyage, fuseau horaire et ré-échantillonnage
+
+**Statut :** Accepté (2026-09-18) — y compris la borne haute d'oxygène dissous, confirmée par l'humain le 2026-09-18 (J-20260918-021 : « garde 15 »)
+
+**Contexte :** l'analyse factuelle (`reports/analyse-donnees-jalon1.md`) fournit les chiffres nécessaires pour trancher les bornes de nettoyage, le fuseau horaire et la stratégie temporelle, décisions ouvertes de `docs/11-TABLEAU_DE_BORD.md` bloquantes pour le Jalon 1.
+
+**Décision :**
+- **Température** : bornes physiques **[0, 40] °C** (déjà documentées, `docs/01` anomalie 1) ; **alerte thermique déclenchée sur la plage critique** [20, 35] °C (0,00 % des relevés hors de cette plage), et non sur la plage optimale [26, 32] °C (95,79 % des relevés seraient sous 26 °C, ce qui déclencherait une alerte quasi permanente) — tranche le constat A3.
+- **pH** : bornes physiques **[0, 14]** ; resserrement à une plage plus réaliste pour l'aquaculture laissé à discuter au Jalon 2, sur la base des 185 relevés hors [4, 10] déjà chiffrés (`reports/analyse-donnees-jalon1.md`, §6).
+- **Oxygène dissous — borne haute : 15 mg/L, définitive** (confirmée par l'humain le 2026-09-18, J-20260918-021). Conséquence chiffrée : 21 614 relevés, soit **26,00 % du fichier**, marqués hors borne physique et traités comme les autres valeurs hors borne (nettoyage/interpolation selon la règle générale).
+- **Ammoniac** : borne de nettoyage **5** (voir ADR-003, déjà accepté).
+- **Nitrate** : **pas de borne physique absolue** — usage relatif uniquement, cohérent avec l'ADR-009 (capteur de gaz).
+- **Fuseau horaire** : le suffixe « CET » est retiré de `created_at`, **sans conversion** ; l'horodatage est conservé tel quel. Les données ne permettent pas de trancher entre « CET » littéral et l'heure locale du Nigeria (WAT), les deux hypothèses partageant le même décalage UTC+1 (`reports/analyse-donnees-jalon1.md`, §9).
+- **Limite d'interpolation** : trou maximal interpolable **1 heure** ; au-delà, la valeur reste **manquante et marquée** (pas d'imputation). Conséquence chiffrée : les 36 jours calendaires entiers sans aucun relevé (sur 117 jours de l'étendue) resteront entièrement manquants.
+- **Ré-échantillonnage** : fréquence **horaire**, appliquée au Jalon 2 dans `src/features.py` (`resample_hourly`) — 48,69 % de créneaux horaires vides, 58,09 relevés bruts en moyenne par créneau non vide.
+
+**Alternatives envisagées :**
+- Borne DO à 8 mg/L (saturation eau douce sans marge) — écartée : marquerait 45,48 % du fichier (37 802 relevés), jugé trop large.
+- Borne DO à 20 mg/L (marge très généreuse) — écartée : ne marque que 21,41 % du fichier (17 796 relevés) mais laisserait passer une part d'un régime de capteur déjà identifié comme distinct (épisode du 30/07-05/08, `reports/analyse-donnees-jalon1.md`, §11).
+- Interpolation sans limite (imputation de tous les trous) — écartée : imputerait des jours entiers sans aucune mesure réelle, contraire à la règle de ne jamais imputer au-delà d'un trou raisonnable.
+- Ré-échantillonnage à la minute ou à 5 minutes — écarté : respectivement 74,63 % et 61,34 % de bins vides.
+
+**Justification :** chaque valeur retenue s'appuie sur un chiffre vérifié du rapport d'analyse, pas sur une estimation ; la plage critique de température évite une alerte permanente non exploitable pour la démonstration (R12) ; la limite d'interpolation à 1 h respecte la règle de ne pas deviner de valeur sur un trou de plusieurs jours ; le ré-échantillonnage horaire est le meilleur compromis observé entre volume de bins vides et densité de données par bin.
+
+**Conséquences :**
+- `src/config.py` (data-engineer) : `AMMONIA_BOUNDS = 5` (ADR-003) ; `DISSOLVED_OXYGEN_BOUNDS` = **15** (borne haute, définitive) — le commentaire « provisoire » est à retirer du code ; `NITRATE_BOUNDS` reste sans borne absolue ; `MAX_INTERPOLATION_GAP` = 1 h ; `RESAMPLING_FREQUENCY` = horaire.
+- Le data-engineer implémente le nettoyage avec l'ensemble de ces valeurs, plus aucune n'étant en attente.
+- `docs/01-DATA_DICTIONARY.md` : statut des anomalies 7 à 11 mis à jour (toutes tranchées).
+
+**Traçabilité :** J-20260918-014, J-20260918-016, J-20260918-021 · Jalon 1 · risques R1 (marge), R9, R10, R12
+
+**Date :** proposé le 2026-09-18 · accepté le 2026-09-18 (décision humaine G1, rapportée par l'orchestrateur — J-20260918-016 ; borne haute d'oxygène dissous confirmée le 2026-09-18, J-20260918-021 : « garde 15 »)
 
 ---
 

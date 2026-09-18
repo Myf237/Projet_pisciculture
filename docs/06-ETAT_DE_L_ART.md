@@ -29,6 +29,7 @@ La littérature la plus récente (2024–2025) s'oriente vers des approches plus
 - Le projet reprend une architecture IoT → nettoyage → modèle → décision → dashboard cohérente avec les pratiques documentées dans la littérature
 - Le choix de modèles interprétables (Random Forest, Isolation Forest) est aligné avec plusieurs études récentes obtenant de bonnes performances avec ces approches
 - La gestion des artefacts de capteurs (anomalies physiquement impossibles) est un axe explicitement discuté dans la littérature comme un défi réel des déploiements IoT — ce projet le traite frontalement plutôt que de l'ignorer
+- Limite de mesure distincte des artefacts : deux des six paramètres de qualité d'eau du dataset (`Ammonia`, `Nitrate`) sont en réalité mesurés par des capteurs de **gaz** suspendus au-dessus de l'eau, et non par des sondes immergées (article source du dataset, ADR-009, `07-JOURNAL_DECISIONS.md`) — une limitation de mesure à assumer explicitement dans le mémoire, distincte du bruit de capteur classique discuté dans la littérature
 - Le projet ne prétend pas être à la pointe de la recherche (deep learning, jumeaux numériques) mais applique un état de l'art "raisonnable et éprouvé", pertinent pour un MVP académique en temps contraint
 
 ## 7. Références principales

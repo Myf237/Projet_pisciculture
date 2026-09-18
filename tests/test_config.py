@@ -135,12 +135,90 @@ def test_ph_bounds_match_data_dictionary() -> None:
 
 
 def test_open_decisions_are_none_not_guessed_values() -> None:
-    """Les bornes/paramètres dépendant d'une décision non tranchée valent None (pas de valeur devinée, docs/11)."""
-    assert config.AMMONIA_BOUNDS is None
-    assert config.DISSOLVED_OXYGEN_BOUNDS is None
-    assert config.NITRATE_BOUNDS is None
-    assert config.MAX_INTERPOLATION_GAP is None
+    """RESAMPLING_FREQUENCY reste None (décision tranchée par ADR-010 mais appliquée seulement au Jalon 2, pas au nettoyage)."""
     assert config.RESAMPLING_FREQUENCY is None
+
+
+def test_ammonia_bounds_match_adr_003_and_adr_010() -> None:
+    """AMMONIA_BOUNDS = borne haute 5 (ADR-003 accepté, ADR-010)."""
+    assert config.AMMONIA_BOUNDS == {"max": 5}
+
+
+def test_dissolved_oxygen_bounds_match_adr_010() -> None:
+    """DISSOLVED_OXYGEN_BOUNDS = borne haute définitive 15 (ADR-010, accepté y compris pour cette borne, 2026-09-18)."""
+    assert config.DISSOLVED_OXYGEN_BOUNDS == {"max": 15}
+
+
+def test_nitrate_bounds_is_permanently_none_per_adr_009() -> None:
+    """NITRATE_BOUNDS reste None de façon durable (ADR-009 : capteur de gaz, pas un artefact à filtrer)."""
+    assert config.NITRATE_BOUNDS is None
+
+
+def test_max_interpolation_gap_is_one_hour_per_adr_010() -> None:
+    """MAX_INTERPOLATION_GAP = "1h" (ADR-010) — conversion effective en pandas.Timedelta vérifiée côté test_ingestion.py."""
+    assert config.MAX_INTERPOLATION_GAP == "1h"
+
+
+def test_sensor_types_covers_all_water_quality_columns_with_expected_keys() -> None:
+    """SENSOR_TYPES couvre les 6 colonnes de qualité d'eau, chacune avec label/sensor/bounds/applicabilité (ADR-009)."""
+    expected_raw_columns = {
+        "Temperature (C)", "PH", "Dissolved Oxygen(g/ml)",
+        "Ammonia(g/ml)", "Nitrate(g/ml)", "Turbidity(NTU)",
+    }
+    assert set(config.SENSOR_TYPES.keys()) == expected_raw_columns
+    for raw_col, meta in config.SENSOR_TYPES.items():
+        assert set(meta.keys()) == {
+            "label", "sensor", "bounds", "threshold_key", "absolute_thresholds_applicable", "note",
+        }
+        assert meta["sensor"] in {"immersed", "gas"}
+        assert meta["threshold_key"] in config.THRESHOLDS
+
+
+def test_get_applicable_thresholds_excludes_gas_sensors_and_undecided_turbidity() -> None:
+    """D2 (reports/validations/jalon-1.md) : accès protégé — ammonia/nitrate/turbidity ne peuvent jamais en sortir."""
+    applicable = config.get_applicable_thresholds()
+
+    assert "ammonia" not in applicable
+    assert "nitrate" not in applicable
+    assert "turbidity" not in applicable
+    assert set(applicable.keys()) == {"temperature", "ph", "dissolved_oxygen"}
+    for key in applicable:
+        assert applicable[key] == config.THRESHOLDS[key]
+
+
+def test_get_applicable_thresholds_stays_protected_even_if_thresholds_has_numeric_values() -> None:
+    """Même si THRESHOLDS contient des valeurs numériques pour ammonia/nitrate, elles ne sont jamais exposées comme applicables."""
+    assert config.THRESHOLDS["ammonia"]["critical_max"] is not None
+    assert config.THRESHOLDS["nitrate"]["critical_max"] is not None
+    assert "ammonia" not in config.get_applicable_thresholds()
+    assert "nitrate" not in config.get_applicable_thresholds()
+
+
+def test_sensor_types_distinguishes_immersed_probes_from_gas_sensors_per_adr_009() -> None:
+    """Température/pH/DO = sondes immergées (seuils applicables) ; ammoniac/nitrate = capteurs de gaz (non applicables)."""
+    immersed = {"Temperature (C)", "PH", "Dissolved Oxygen(g/ml)"}
+    gas = {"Ammonia(g/ml)", "Nitrate(g/ml)"}
+    for raw_col in immersed:
+        assert config.SENSOR_TYPES[raw_col]["sensor"] == "immersed"
+        assert config.SENSOR_TYPES[raw_col]["absolute_thresholds_applicable"] is True
+    for raw_col in gas:
+        assert config.SENSOR_TYPES[raw_col]["sensor"] == "gas"
+        assert config.SENSOR_TYPES[raw_col]["absolute_thresholds_applicable"] is False
+
+
+def test_other_raw_columns_covers_entry_id_and_population() -> None:
+    """OTHER_RAW_COLUMNS documente les colonnes brutes ni bornées ni reconstruites (D6, reports/validations/jalon-1.md)."""
+    assert set(config.OTHER_RAW_COLUMNS.keys()) == {"entry_id", "Population"}
+    for note in config.OTHER_RAW_COLUMNS.values():
+        assert isinstance(note, str) and note
+
+
+def test_growth_columns_map_raw_names_to_short_labels() -> None:
+    """GROWTH_COLUMNS associe les colonnes brutes de croissance à un nom court sans unité."""
+    assert config.GROWTH_COLUMNS == {
+        "Fish_Weight(g)": "Fish_Weight",
+        "Fish_Length(cm)": "Fish_Length",
+    }
 
 
 def test_rolling_window_default_is_1h_as_in_docs_03() -> None:

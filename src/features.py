@@ -65,7 +65,9 @@ def add_threshold_distance(df: pd.DataFrame, thresholds: dict) -> pd.DataFrame:
     - **Paramètre à borne critique unique inférieure** (seul `critical_min`
       défini, ex. `dissolved_oxygen`) : `distance = valeur - critical_min`.
     - **Paramètre à borne critique unique supérieure** (seul `critical_max`
-      défini, ex. `ammonia`, `nitrate`) : `distance = critical_max - valeur`.
+      défini) : `distance = critical_max - valeur`. Aucun paramètre
+      actuellement applicable n'est dans ce cas (voir ci-dessous) ; la
+      formule reste documentée pour un futur paramètre immergé de ce type.
     - **Paramètre à double borne critique** (`critical_min` et
       `critical_max` définis, ex. `temperature`, `ph`) : distance signée à la
       borne critique la plus proche — si `critical_min <= valeur <=
@@ -74,22 +76,28 @@ def add_threshold_distance(df: pd.DataFrame, thresholds: dict) -> pd.DataFrame:
       critical_min` (< 0) ; si `valeur > critical_max`, `distance =
       critical_max - valeur` (< 0).
     - **Seuil non exploitable → colonne non produite** (pas de valeur
-      devinée) : si `critical_min` et `critical_max` valent tous deux `None`
-      dans `thresholds` (ex. `turbidity`, décision ouverte, docs/11) **ou**
-      si le paramètre est `dissolved_oxygen`, `ammonia` ou `nitrate` tant que
-      son unité n'est pas tranchée (décision A1 — `config.DISSOLVED_OXYGEN_BOUNDS`,
-      `config.AMMONIA_BOUNDS`, `config.NITRATE_BOUNDS` encore `None` alors
-      même que `THRESHOLDS` contient des valeurs numériques héritées de
-      `docs/03`), alors `<clé>_distance_critical` n'est **pas** calculée pour
-      ce paramètre (règle data-engineer n°3 : ne jamais appliquer un seuil à
-      une colonne dont l'unité n'est pas tranchée), plutôt que de retourner
-      une colonne à `NaN` ou une valeur non fiable.
+      devinée). Reformulé le 2026-09-18 (D3, `reports/validations/jalon-1.md`) :
+      ce n'était plus exact de fonder l'exclusion de `dissolved_oxygen` sur
+      une unité non tranchée — l'ADR-009/010 a tranché l'unité (mg/L) *et*
+      la borne (`config.DISSOLVED_OXYGEN_BOUNDS = {"max": 15}`) : ce
+      paramètre est désormais **inclus**, pas exclu. La règle réelle,
+      indépendante de tout indicateur `None` : `<clé>_distance_critical`
+      n'est calculée que pour les clés présentes dans
+      `config.get_applicable_thresholds()` (sondes immergées à seuils
+      aquacoles applicables — température, pH, oxygène dissous). Sont donc
+      exclus : `turbidity` (`critical_min`/`critical_max` valent tous deux
+      `None`, seuil encore à définir — Jalon 2, docs/11) et `ammonia` /
+      `nitrate`, non plus pour une question d'unité mais parce que ce sont
+      des capteurs de gaz suspendus au-dessus de l'eau, pas des sondes
+      immergées (ADR-009) — `THRESHOLDS["ammonia"]`/`["nitrate"]` contiennent
+      des valeurs numériques héritées du cahier §5 qui ne doivent jamais être
+      lues comme des seuils absolus (règle data-engineer n°3).
     - **Nommage** : `<clé>_distance_critical`, où `<clé>` est la clé du
       paramètre dans `thresholds` (ex. `temperature_distance_critical`,
       `ph_distance_critical`), jamais le nom de colonne brut.
 
-    Règles à respecter : ne jamais appliquer un seuil à une colonne dont
-    l'unité/la borne n'est pas tranchée (règle data-engineer n°3) ;
+    Règles à respecter : ne jamais appliquer un seuil absolu à un paramètre
+    hors de `config.get_applicable_thresholds()` (règle data-engineer n°3) ;
     implémentation vectorisée (pandas/numpy), pas de boucle ligne à ligne
     (règle data-engineer n°9).
     """

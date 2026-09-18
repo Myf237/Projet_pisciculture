@@ -8,6 +8,7 @@ Ordre de lecture recommandé selon le besoin :
 
 ## Pour développer (Claude Code)
 3. `01-DATA_DICTIONARY.md` — comprendre les données réelles et leurs anomalies
+   - `AquaponicsDatapaper.pdf` — article source du dataset, versionné localement (commit `c679040`) : Udanor, Ossai, Nweke, Ogbuokiri, Eneh, « An internet of things labelled dataset for aquaponics fish pond water quality monitoring system », *Data in Brief* 43 (2022) 108400, DOI [10.1016/j.dib.2022.108400](https://doi.org/10.1016/j.dib.2022.108400) — accès libre sous licence **CC BY 4.0**, redistribué ici avec attribution. Source des unités réelles et de la nature des capteurs (ADR-009).
 4. `02-SPEC_TECHNIQUE.md` — exigences détaillées par module
 5. `03-ARCHITECTURE_CODE.md` — structure de dépôt et signatures de fonctions
 6. `04-JALONS_VALIDATION.md` — critères de validation à chaque étape
