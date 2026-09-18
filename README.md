@@ -33,14 +33,25 @@ pytest -q
 
 ## Utilisation
 
-Le pipeline n'est pas encore implémenté (squelette de fonctions, `NotImplementedError`). À terme (Jalon 6) :
+### Aujourd'hui (Jalon 1 — nettoyage des données, implémenté et vérifié)
 
 ```powershell
-python src\main.py                 # pipeline complet : ingestion → modèle → décision
-streamlit run dashboard\app.py     # dashboard de démonstration (rejeu historique)
+python -m src.ingestion                        # régénère data/processed/pond1_clean.csv et reports/cleaning_report.json depuis data/raw/IoTpond1.csv
+python -m src.ingestion --input <chemin.csv>   # même traitement sur un autre fichier brut (même schéma, docs/01)
 ```
 
-**Non implémenté à ce stade** : nettoyage des données, features, modèles de détection de risque et de croissance, moteur de décision, dashboard. Voir `docs/11-TABLEAU_DE_BORD.md` pour l'état d'avancement réel par jalon.
+Code de sortie 0 et message sur `stderr` en cas de succès ; code de sortie non nul et message d'erreur clair sur `stderr` en cas d'échec (ex. fichier brut introuvable). Cette commande ne couvre que le Module 1 (ingestion + nettoyage) — détail des artefacts produits : `docs/03-ARCHITECTURE_CODE.md`.
+
+### À terme (Jalon 6 — pipeline complet, pas encore implémenté)
+
+`python src\main.py` lève toujours `NotImplementedError` : le pipeline complet (ingestion → features → modèle → décision) arrive au Jalon 6.
+
+```powershell
+python src\main.py                 # pipeline complet : ingestion → modèle → décision (Jalon 6)
+streamlit run dashboard\app.py     # dashboard de démonstration (rejeu historique, Jalon 5)
+```
+
+**Non implémenté à ce stade** : features, modèles de détection de risque et de croissance, moteur de décision, dashboard, pipeline complet (`src/main.py`). Le nettoyage des données (Jalon 1) est implémenté et vérifié (`reports/validations/jalon-1.md`). Voir `docs/11-TABLEAU_DE_BORD.md` pour l'état d'avancement réel par jalon.
 
 ## Données
 
