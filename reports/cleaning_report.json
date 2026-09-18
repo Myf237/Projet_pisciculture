@@ -1,0 +1,143 @@
+{
+  "generated_at": "2026-09-18T11:56:44.093951+00:00",
+  "source_file": {
+    "path": "C:\\Users\\Admin\\Desktop\\Projet_master1\\Projet_pisiculture\\data\\raw\\IoTpond1.csv",
+    "sha256": "063ea4f0c9fcd24f016fbfc52e5422b655dfb4f3542d40476d99d899655dda76"
+  },
+  "decisions_applied": [
+    "ADR-003",
+    "ADR-009",
+    "ADR-010"
+  ],
+  "timestamp_suffix_removed": "CET",
+  "timestamp_conversion": "none (ADR-010 : suffixe retiré, horodatage conservé tel quel)",
+  "max_interpolation_gap": "1h",
+  "n_rows": 83126,
+  "n_duplicate_timestamps": 0,
+  "columns": {
+    "Temperature (C)": {
+      "label": "Temperature",
+      "sensor": "immersed",
+      "absolute_thresholds_applicable": true,
+      "bounds": {
+        "min": 0,
+        "max": 40
+      },
+      "n_out_of_bounds": 1,
+      "n_missing_raw": 0,
+      "n_imputed": 1,
+      "n_still_missing": 0,
+      "note": null
+    },
+    "PH": {
+      "label": "PH",
+      "sensor": "immersed",
+      "absolute_thresholds_applicable": true,
+      "bounds": {
+        "min": 0,
+        "max": 14
+      },
+      "n_out_of_bounds": 40,
+      "n_missing_raw": 0,
+      "n_imputed": 0,
+      "n_still_missing": 40,
+      "note": null
+    },
+    "Dissolved Oxygen(g/ml)": {
+      "label": "Dissolved Oxygen",
+      "sensor": "immersed",
+      "absolute_thresholds_applicable": true,
+      "bounds": {
+        "max": 15
+      },
+      "n_out_of_bounds": 21614,
+      "n_missing_raw": 0,
+      "n_imputed": 8371,
+      "n_still_missing": 13243,
+      "note": "ADR-010 : borne haute définitive 15 mg/L (confirmée par décision humaine le 2026-09-18), retenue parmi les candidates 8 / 15 / 20 mg/L."
+    },
+    "Ammonia(g/ml)": {
+      "label": "Ammonia",
+      "sensor": "gas",
+      "absolute_thresholds_applicable": false,
+      "bounds": {
+        "max": 5
+      },
+      "n_out_of_bounds": 27560,
+      "n_missing_raw": 52,
+      "n_imputed": 4337,
+      "n_still_missing": 23275,
+      "note": "ADR-003 : au-delà de 5, valeur exclue par seuillage de plausibilité aquacole (continuum de 1 838 valeurs distinctes, pas un code d'erreur unique — voir reports/analyse-donnees-jalon1.md §4, corrigé le 2026-09-18). Usage relatif en modélisation (ADR-009, capteur de gaz)."
+    },
+    "Nitrate(g/ml)": {
+      "label": "Nitrate",
+      "sensor": "gas",
+      "absolute_thresholds_applicable": false,
+      "bounds": null,
+      "n_out_of_bounds": 0,
+      "n_missing_raw": 0,
+      "n_imputed": 0,
+      "n_still_missing": 0,
+      "note": "ADR-009 : capteur de gaz (MQ135) suspendu au-dessus de l'eau — aucune borne absolue appliquée, colonne non modifiée par le nettoyage."
+    },
+    "Turbidity(NTU)": {
+      "label": "Turbidity",
+      "sensor": "immersed",
+      "absolute_thresholds_applicable": null,
+      "bounds": null,
+      "n_out_of_bounds": 0,
+      "n_missing_raw": 0,
+      "n_imputed": 0,
+      "n_still_missing": 0,
+      "note": "Seuil non tranché (décision ouverte, Jalon 2) — colonne non modifiée par le nettoyage."
+    },
+    "created_at": {
+      "label": "created_at",
+      "role": "timestamp",
+      "n_missing_raw": 0,
+      "note": "Colonne d'horodatage (config.TIMESTAMP_COLUMN) — doublons et couverture rapportés séparément (n_duplicate_timestamps=0)."
+    },
+    "entry_id": {
+      "label": "entry_id",
+      "role": "metadata",
+      "n_missing_raw": 0,
+      "note": "Identifiant séquentiel du relevé, non concerné par le nettoyage physique."
+    },
+    "Population": {
+      "label": "Population",
+      "role": "metadata",
+      "n_missing_raw": 0,
+      "note": "Métadonnée constante du bac (docs/01 anomalie 4), pas une variable dynamique de qualité d'eau — non nettoyée."
+    }
+  },
+  "growth_curve": {
+    "n_paliers": 81,
+    "columns": {
+      "Fish_Weight(g)": {
+        "label": "Fish_Weight",
+        "n_missing_raw": 2,
+        "n_non_monotonic": 0,
+        "flagged_points": []
+      },
+      "Fish_Length(cm)": {
+        "label": "Fish_Length",
+        "n_missing_raw": 2,
+        "n_non_monotonic": 3,
+        "flagged_points": [
+          {
+            "created_at": "2021-07-15T00:02:47",
+            "value": 15.31
+          },
+          {
+            "created_at": "2021-08-22T01:43:01",
+            "value": 23.4
+          },
+          {
+            "created_at": "2021-09-05T00:07:20",
+            "value": 12.09
+          }
+        ]
+      }
+    }
+  }
+}
