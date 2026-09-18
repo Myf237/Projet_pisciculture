@@ -291,6 +291,107 @@ def test_clean_data_applies_no_absolute_bound_to_nitrate() -> None:
     assert report["columns"]["Nitrate(g/ml)"]["absolute_thresholds_applicable"] is False
 
 
+# --- clean_data : colonne de valeur brute conservée en parallèle (décision --
+# --- G1 du 2026-09-18, J-20260918-042/044) -----------------------------------
+
+
+def test_clean_data_preserves_raw_value_in_parallel_column_when_out_of_bounds() -> None:
+    """<label>_raw conserve la valeur brute d'origine hors bornes, sans imputation, même quand la colonne nettoyée est marquée manquante."""
+    df = _synthetic_clean_input(
+        [
+            {"created_at": "2021-06-19 00:00:00", "Dissolved Oxygen(g/ml)": 38.6},  # hors bornes, isolée -> reste manquante
+            {"created_at": "2021-06-19 03:00:00", "Dissolved Oxygen(g/ml)": 5.0},   # dans les bornes
+        ]
+    )
+    clean_df, report = ingestion.clean_data(df)
+
+    raw_col = f"Dissolved Oxygen{config.RAW_VALUE_SUFFIX}"
+    assert raw_col in clean_df.columns
+    # La valeur brute est conservée telle quelle, y compris hors bornes.
+    assert clean_df.loc[0, raw_col] == 38.6
+    # La colonne nettoyée, elle, ne montre plus la valeur hors bornes brute
+    # (trou de 3h > MAX_INTERPOLATION_GAP : reste manquante, D9).
+    assert clean_df.loc[0, "Dissolved Oxygen_missing"] == True  # noqa: E712
+    assert pd.isna(clean_df.loc[0, "Dissolved Oxygen(g/ml)"])
+    # Valeur dans les bornes : la colonne brute et la colonne nettoyée coïncident.
+    assert clean_df.loc[1, raw_col] == 5.0
+    assert clean_df.loc[1, "Dissolved Oxygen(g/ml)"] == 5.0
+    assert report["columns"]["Dissolved Oxygen(g/ml)"]["raw_value_column"] == raw_col
+
+
+def test_clean_data_raw_value_column_preserved_even_when_cleaned_value_is_imputed() -> None:
+    """<label>_raw garde la valeur brute même quand la colonne nettoyée, elle, a été comblée par interpolation (les deux colonnes divergent alors)."""
+    df = _synthetic_clean_input(
+        [
+            {"created_at": "2021-06-19 00:00:00", "Temperature (C)": 24.0},
+            {"created_at": "2021-06-19 00:00:20", "Temperature (C)": -127.0},  # hors bornes, voisins proches -> imputée
+            {"created_at": "2021-06-19 00:00:40", "Temperature (C)": 24.2},
+        ]
+    )
+    clean_df, _ = ingestion.clean_data(df)
+
+    raw_col = f"Temperature{config.RAW_VALUE_SUFFIX}"
+    assert clean_df.loc[1, raw_col] == -127.0  # jamais modifiée
+    assert clean_df.loc[1, "Temperature_imputed"] == True  # noqa: E712
+    assert clean_df.loc[1, "Temperature (C)"] != -127.0  # la colonne nettoyée, elle, a bien été comblée
+    assert clean_df.loc[1, "Temperature (C)"] != clean_df.loc[1, raw_col]  # les deux colonnes divergent
+
+
+def test_clean_data_raw_value_column_keeps_nan_when_raw_value_already_missing() -> None:
+    """<label>_raw garde NaN si la valeur brute d'origine l'était déjà — jamais une valeur fabriquée."""
+    df = _synthetic_clean_input([{"created_at": "2021-06-19 00:00:00", "PH": None}])
+    clean_df, _ = ingestion.clean_data(df)
+    assert pd.isna(clean_df.loc[0, f"PH{config.RAW_VALUE_SUFFIX}"])
+
+
+def test_clean_data_raw_value_column_only_for_bounded_variables() -> None:
+    """Nitrate et Turbidity (sans borne) n'ont pas de colonne <label>_raw dédiée : la colonne brute est déjà leur seule valeur."""
+    df = _synthetic_clean_input(
+        [{"created_at": "2021-06-19 00:00:00", "Nitrate(g/ml)": 150, "Turbidity(NTU)": 50}]
+    )
+    clean_df, report = ingestion.clean_data(df)
+
+    assert "Nitrate_raw" not in clean_df.columns
+    assert "Turbidity_raw" not in clean_df.columns
+    assert report["columns"]["Nitrate(g/ml)"]["raw_value_column"] is None
+    assert report["columns"]["Turbidity(NTU)"]["raw_value_column"] is None
+
+
+def test_clean_data_raw_value_suffix_comes_from_config_not_hard_coded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Le suffixe de la colonne de valeur brute suit config.RAW_VALUE_SUFFIX (aucune valeur en dur, règle data-engineer n°2)."""
+    monkeypatch.setattr(config, "RAW_VALUE_SUFFIX", "_original")
+    df = _synthetic_clean_input([{"created_at": "2021-06-19 00:00:00", "Temperature (C)": 24.0}])
+    clean_df, report = ingestion.clean_data(df)
+
+    assert "Temperature_original" in clean_df.columns
+    assert "Temperature_raw" not in clean_df.columns
+    assert report["columns"]["Temperature (C)"]["raw_value_column"] == "Temperature_original"
+
+
+def test_clean_data_episode1_do_plateau_readable_again_in_raw_column_on_regenerated_livrable() -> None:
+    """Confirmation par calcul (petit jeu représentatif) que l'épisode 1 (plateau DO 36-41, 30/07-05/08) redevient lisible dans Dissolved Oxygen_raw,
+    alors qu'il est entièrement `missing` dans la colonne nettoyée — le problème signalé en J-20260918-039/040, résolu par G1 J-20260918-042/044."""
+    df = _synthetic_clean_input(
+        [
+            {"created_at": "2021-07-29 23:00:00", "Dissolved Oxygen(g/ml)": 4.0},  # avant l'épisode, dans les bornes
+            {"created_at": "2021-07-30 02:00:00", "Dissolved Oxygen(g/ml)": 38.6},  # début du plateau, hors bornes
+            {"created_at": "2021-08-01 12:00:00", "Dissolved Oxygen(g/ml)": 39.1},  # milieu du plateau (>1h de trou)
+            {"created_at": "2021-08-05 09:00:00", "Dissolved Oxygen(g/ml)": 4.4},   # retour au régime bas, dans les bornes
+        ]
+    )
+    clean_df, _ = ingestion.clean_data(df)
+    raw_col = f"Dissolved Oxygen{config.RAW_VALUE_SUFFIX}"
+
+    plateau_mask = clean_df[config.TIMESTAMP_COLUMN].between("2021-07-30 02:00:00", "2021-08-01 12:00:00")
+    # Colonne nettoyée : le plateau reste bien manquant (trous >> 1h, non comblés).
+    assert clean_df.loc[plateau_mask, "Dissolved Oxygen(g/ml)"].isna().all()
+    assert clean_df.loc[plateau_mask, "Dissolved Oxygen_missing"].all()
+    # Colonne brute : le plateau est de nouveau exploitable (valeurs réelles, dans la plage attendue 36-41).
+    raw_plateau = clean_df.loc[plateau_mask, raw_col]
+    assert raw_plateau.notna().all()
+    assert raw_plateau.between(35, 41).all()
+
+
 # --- clean_data : interpolation limitée dans le temps -----------------------
 
 
@@ -400,7 +501,7 @@ def test_clean_data_report_is_complete_per_column() -> None:
     assert bounded_columns | other_columns <= set(report["columns"].keys())
     for col_name in bounded_columns:
         col_report = report["columns"][col_name]
-        for key in ("bounds", "n_out_of_bounds", "n_missing_raw", "n_imputed", "n_still_missing", "note"):
+        for key in ("bounds", "n_out_of_bounds", "n_missing_raw", "n_imputed", "n_still_missing", "raw_value_column", "note"):
             assert key in col_report, f"{col_name} : clé '{key}' absente du rapport"
     for col_name in other_columns:
         col_report = report["columns"][col_name]

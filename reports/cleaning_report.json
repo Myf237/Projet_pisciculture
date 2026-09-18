@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-18T11:56:44.093951+00:00",
+  "generated_at": "2026-09-18T22:24:47.640862+00:00",
   "source_file": {
     "path": "C:\\Users\\Admin\\Desktop\\Projet_master1\\Projet_pisiculture\\data\\raw\\IoTpond1.csv",
     "sha256": "063ea4f0c9fcd24f016fbfc52e5422b655dfb4f3542d40476d99d899655dda76"
@@ -27,6 +27,7 @@
       "n_missing_raw": 0,
       "n_imputed": 1,
       "n_still_missing": 0,
+      "raw_value_column": "Temperature_raw",
       "note": null
     },
     "PH": {
@@ -41,6 +42,7 @@
       "n_missing_raw": 0,
       "n_imputed": 0,
       "n_still_missing": 40,
+      "raw_value_column": "PH_raw",
       "note": null
     },
     "Dissolved Oxygen(g/ml)": {
@@ -54,6 +56,7 @@
       "n_missing_raw": 0,
       "n_imputed": 8371,
       "n_still_missing": 13243,
+      "raw_value_column": "Dissolved Oxygen_raw",
       "note": "ADR-010 : borne haute définitive 15 mg/L (confirmée par décision humaine le 2026-09-18), retenue parmi les candidates 8 / 15 / 20 mg/L."
     },
     "Ammonia(g/ml)": {
@@ -67,6 +70,7 @@
       "n_missing_raw": 52,
       "n_imputed": 4337,
       "n_still_missing": 23275,
+      "raw_value_column": "Ammonia_raw",
       "note": "ADR-003 : au-delà de 5, valeur exclue par seuillage de plausibilité aquacole (continuum de 1 838 valeurs distinctes, pas un code d'erreur unique — voir reports/analyse-donnees-jalon1.md §4, corrigé le 2026-09-18). Usage relatif en modélisation (ADR-009, capteur de gaz)."
     },
     "Nitrate(g/ml)": {
@@ -78,6 +82,7 @@
       "n_missing_raw": 0,
       "n_imputed": 0,
       "n_still_missing": 0,
+      "raw_value_column": null,
       "note": "ADR-009 : capteur de gaz (MQ135) suspendu au-dessus de l'eau — aucune borne absolue appliquée, colonne non modifiée par le nettoyage."
     },
     "Turbidity(NTU)": {
@@ -89,6 +94,7 @@
       "n_missing_raw": 0,
       "n_imputed": 0,
       "n_still_missing": 0,
+      "raw_value_column": null,
       "note": "Seuil non tranché (décision ouverte, Jalon 2) — colonne non modifiée par le nettoyage."
     },
     "created_at": {

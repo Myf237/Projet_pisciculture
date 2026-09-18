@@ -171,24 +171,37 @@ def clean_data(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     brut, les bornes appliquées et le résultat de `rebuild_growth_curve`
     (D6, `reports/validations/jalon-1.md`).
 
-    Schéma du DataFrame nettoyé (D9, `reports/validations/jalon-1.md`) : les
-    11 colonnes brutes, plus **deux** colonnes booléennes par variable bornée
-    de `config.SENSOR_TYPES` (température, pH, oxygène dissous, ammoniac) —
-    `<label>_imputed` (`True` **seulement** si la valeur d'origine était hors
-    bornes ou manquante **et** a été comblée par interpolation) et
-    `<label>_missing` (`True` si elle est hors bornes ou manquante et
-    **reste** `NaN` dans la colonne, trou trop long ou bord de série). Les
-    deux ne sont jamais vraies simultanément ; ni l'une ni l'autre ne l'est
-    pour une valeur d'origine valide. Nitrate et turbidité n'ont pas de borne
-    absolue (ADR-009 pour le nitrate, décision ouverte pour la turbidité,
-    Jalon 2) : colonnes non modifiées, sans colonne de marquage, seulement
-    documentées dans le rapport pour rester complet par colonne (règle
-    data-engineer n°5). `entry_id`, `Population`, `Fish_Length(cm)` et
-    `Fish_Weight(g)` ne sont pas concernées par ce nettoyage par bornes
-    physiques (`Population` = métadonnée constante, docs/01 anomalie 4 ;
-    `Fish_Length`/`Fish_Weight` reconstruites par `rebuild_growth_curve`,
-    appelée ici uniquement pour alimenter le rapport, sans modifier ces deux
-    colonnes dans le DataFrame retourné).
+    Schéma du DataFrame nettoyé (D9, `reports/validations/jalon-1.md` ;
+    complété par la décision G1 du 2026-09-18, J-20260918-042/044) : les
+    11 colonnes brutes, plus **trois** colonnes supplémentaires par variable
+    bornée de `config.SENSOR_TYPES` (température, pH, oxygène dissous,
+    ammoniac) — `<label>_imputed` (`True` **seulement** si la valeur
+    d'origine était hors bornes ou manquante **et** a été comblée par
+    interpolation), `<label>_missing` (`True` si elle est hors bornes ou
+    manquante et **reste** `NaN` dans la colonne, trou trop long ou bord de
+    série), et `<label>{config.RAW_VALUE_SUFFIX}` (valeur brute d'origine,
+    **telle que lue, sans aucune modification** — y compris hors bornes,
+    y compris `NaN` si la valeur brute l'était déjà — jamais imputée). Les
+    deux drapeaux booléens ne sont jamais vrais simultanément ; ni l'un ni
+    l'autre ne l'est pour une valeur d'origine valide. La colonne
+    `<label>{config.RAW_VALUE_SUFFIX}` est indépendante des deux drapeaux :
+    elle existe pour **toutes** les lignes (y compris les valeurs valides,
+    où elle est simplement égale à la colonne nettoyée) et permet de
+    retrouver une dérive de capteur (ex. plateau DO 36-41 mg/L du
+    30/07-05/08, intégralement `missing` dans la colonne nettoyée faute de
+    pouvoir être interpolée sur un trou aussi long) sans renoncer au
+    nettoyage de la colonne principale. Nitrate et turbidité n'ont pas de
+    borne absolue (ADR-009 pour le nitrate, décision ouverte pour la
+    turbidité, Jalon 2) : colonnes non modifiées, sans colonne de marquage
+    ni colonne `_raw` dédiée (la colonne brute est déjà, par construction,
+    la seule colonne existante), seulement documentées dans le rapport pour
+    rester complet par colonne (règle data-engineer n°5). `entry_id`,
+    `Population`, `Fish_Length(cm)` et `Fish_Weight(g)` ne sont pas
+    concernées par ce nettoyage par bornes physiques (`Population` =
+    métadonnée constante, docs/01 anomalie 4 ; `Fish_Length`/`Fish_Weight`
+    reconstruites par `rebuild_growth_curve`, appelée ici uniquement pour
+    alimenter le rapport, sans modifier ces deux colonnes dans le DataFrame
+    retourné).
     """
     ts_col = config.TIMESTAMP_COLUMN
     if ts_col not in df.columns:
@@ -221,6 +234,9 @@ def clean_data(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
                 "n_missing_raw": n_missing_raw,
                 "n_imputed": 0,
                 "n_still_missing": n_missing_raw,
+                # Pas de colonne "_raw" dédiée : sans borne, la colonne brute
+                # n'est jamais modifiée, elle est déjà sa propre valeur d'origine.
+                "raw_value_column": None,
                 "note": meta["note"],
             }
             continue
@@ -239,6 +255,12 @@ def clean_data(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         final_series, imputed_mask = _gap_limited_interpolation(raw_series, timestamps, invalid_mask, max_gap)
         still_missing_mask = invalid_mask & ~imputed_mask
 
+        raw_value_column = f"{label}{config.RAW_VALUE_SUFFIX}"
+        # Valeur brute conservée telle quelle (décision G1, J-20260918-042/044) :
+        # copie de `raw_series` AVANT tout nettoyage, jamais recalculée à
+        # partir de la colonne nettoyée — aucune imputation, aucune borne.
+        working[raw_value_column] = raw_series.to_numpy()
+
         working[raw_col] = final_series
         working[f"{label}_imputed"] = imputed_mask.to_numpy()
         working[f"{label}_missing"] = still_missing_mask.to_numpy()
@@ -255,6 +277,7 @@ def clean_data(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
             "n_missing_raw": n_missing_raw,
             "n_imputed": n_imputed,
             "n_still_missing": n_still_missing,
+            "raw_value_column": raw_value_column,
             "note": meta["note"],
         }
 
