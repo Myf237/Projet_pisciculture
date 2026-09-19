@@ -196,6 +196,29 @@ def test_add_rolling_features_raw_column_is_also_causal() -> None:
     )
 
 
+def test_add_rolling_features_raw_value_suffix_comes_from_config_not_hard_coded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Le suffixe de colonne brute utilisé par add_rolling_features suit config.RAW_VALUE_SUFFIX,
+    jamais un littéral "_raw" en dur (règle data-engineer n°2 ; même modèle que
+    tests/test_ingestion.py::test_clean_data_raw_value_suffix_comes_from_config_not_hard_coded ;
+    D10, reports/validations/jalon-2.md itération 2, mutation M10)."""
+    monkeypatch.setattr(config, "RAW_VALUE_SUFFIX", "_original")
+    df = _rolling_input(
+        [
+            {"created_at": "2021-07-30 02:00:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_original": 38.6},
+            {"created_at": "2021-07-30 02:20:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_original": 39.1},
+        ]
+    )
+    out = features.add_rolling_features(df, window="1h")
+
+    assert "Dissolved Oxygen_original_rolling_mean" in out.columns
+    assert "Dissolved Oxygen_original_rolling_std" in out.columns
+    # Un suffixe "_raw" en dur chercherait "Dissolved Oxygen_raw", absent ici :
+    # aucune colonne glissante brute ne doit apparaître sous ce nom.
+    assert "Dissolved Oxygen_raw_rolling_mean" not in out.columns
+
+
 # --- add_threshold_distance : convention de signe ---------------------------
 
 
@@ -523,3 +546,122 @@ def test_resample_hourly_episode1_do_plateau_visible_in_raw_hourly_aggregates() 
     assert plateau_slots["Dissolved Oxygen_raw_n_present"].sum() == 4
     assert plateau_slots["Dissolved Oxygen_raw_mean"].between(35, 41).all()
     assert plateau_slots["Dissolved Oxygen_n_out_of_bounds"].sum() == 4
+
+
+# --- resample_hourly : suffixe brut lu depuis config, cas limites et NaN de --
+# --- n_out_of_bounds (D10, reports/validations/jalon-2.md itération 2, ------
+# --- mutations M6, M7, M7b, M9, M11) -----------------------------------------
+
+
+def test_resample_hourly_raw_value_suffix_comes_from_config_not_hard_coded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Le suffixe de colonne brute utilisé par resample_hourly suit config.RAW_VALUE_SUFFIX,
+    jamais un littéral "_raw" en dur (règle data-engineer n°2 ; même modèle que
+    tests/test_ingestion.py::test_clean_data_raw_value_suffix_comes_from_config_not_hard_coded ;
+    mutation M9)."""
+    monkeypatch.setattr(config, "RAW_VALUE_SUFFIX", "_original")
+    df = _resample_input(
+        [
+            {"created_at": "2021-07-30 02:05:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_original": 38.6,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": True},
+        ]
+    )
+    out = features.resample_hourly(df)
+
+    assert "Dissolved Oxygen_original_mean" in out.columns
+    assert "Dissolved Oxygen_original_n_present" in out.columns
+    # Un suffixe "_raw" en dur chercherait "Dissolved Oxygen_raw", absent ici.
+    assert "Dissolved Oxygen_raw_mean" not in out.columns
+
+
+def test_resample_hourly_n_out_of_bounds_excludes_value_exactly_at_lower_bound() -> None:
+    """Une valeur brute exactement égale à bounds["min"] n'est PAS comptée hors bornes ; juste
+    en-dessous, elle l'est (cas limite exigé par .claude/rules/conventions-code.md § Tests :
+    juste sous / égal / juste au-dessus). Même convention que ingestion.clean_data, cf.
+    tests/test_ingestion.py::test_clean_data_enforces_temperature_and_ph_bounds_at_edges
+    (mutation M7b, `<` -> `<=`). Température choisie pour isoler la borne basse (valeurs très
+    inférieures à critical_max/bounds['max'] = 40, donc aucune interférence avec la borne haute)."""
+    lower = config.TEMPERATURE_BOUNDS["min"]
+    df = _resample_input(
+        [
+            {"created_at": "2021-06-19 00:05:00", "Temperature (C)": None, "Temperature_raw": lower - 0.1,
+             "Temperature_imputed": False, "Temperature_missing": True},  # juste sous la borne : hors bornes
+            {"created_at": "2021-06-19 00:15:00", "Temperature (C)": lower, "Temperature_raw": lower,
+             "Temperature_imputed": False, "Temperature_missing": False},  # exactement à la borne : pas hors bornes
+            {"created_at": "2021-06-19 00:25:00", "Temperature (C)": lower + 0.1, "Temperature_raw": lower + 0.1,
+             "Temperature_imputed": False, "Temperature_missing": False},  # juste au-dessus : pas hors bornes
+        ]
+    )
+    out = features.resample_hourly(df)
+    slot = out.iloc[0]
+
+    assert slot["Temperature_n_out_of_bounds"] == 1
+
+
+def test_resample_hourly_n_out_of_bounds_excludes_value_exactly_at_upper_bound() -> None:
+    """Une valeur brute exactement égale à bounds["max"] n'est PAS comptée hors bornes ; juste
+    au-dessus, elle l'est (cas limite exigé par .claude/rules/conventions-code.md § Tests :
+    juste sous / égal / juste au-dessus). Même convention que ingestion.clean_data, cf.
+    tests/test_ingestion.py::test_clean_data_applies_dissolved_oxygen_bound_per_adr_010
+    (mutation M7, `>` -> `>=`). Oxygène dissous choisi pour isoler la borne haute
+    (DISSOLVED_OXYGEN_BOUNDS n'a pas de borne basse : bounds.get("min") est None)."""
+    upper = config.DISSOLVED_OXYGEN_BOUNDS["max"]
+    assert config.DISSOLVED_OXYGEN_BOUNDS.get("min") is None  # hypothèse du test : isole la borne haute
+    df = _resample_input(
+        [
+            {"created_at": "2021-06-19 00:05:00", "Dissolved Oxygen(g/ml)": upper - 0.1, "Dissolved Oxygen_raw": upper - 0.1,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": False},  # juste sous : pas hors bornes
+            {"created_at": "2021-06-19 00:15:00", "Dissolved Oxygen(g/ml)": upper, "Dissolved Oxygen_raw": upper,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": False},  # exactement à la borne : pas hors bornes
+            {"created_at": "2021-06-19 00:25:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": upper + 0.1,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": True},  # juste au-dessus : hors bornes
+        ]
+    )
+    out = features.resample_hourly(df)
+    slot = out.iloc[0]
+
+    assert slot["Dissolved Oxygen_n_out_of_bounds"] == 1
+
+
+def test_resample_hourly_raw_n_present_excludes_nan_raw_values() -> None:
+    """<label>_raw_n_present compte les valeurs brutes réellement présentes, jamais le nombre
+    total de relevés du créneau (`n_readings`) : une valeur brute NaN n'est jamais comptée comme
+    présente (mutation M6 : `raw_n_present = n_readings`)."""
+    df = _resample_input(
+        [
+            {"created_at": "2021-06-19 00:05:00", "Dissolved Oxygen(g/ml)": 5.0, "Dissolved Oxygen_raw": 5.0,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": False},
+            {"created_at": "2021-06-19 00:15:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": None,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": True},
+            {"created_at": "2021-06-19 00:25:00", "Dissolved Oxygen(g/ml)": 5.4, "Dissolved Oxygen_raw": 5.4,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": False},
+        ]
+    )
+    out = features.resample_hourly(df)
+    slot = out.iloc[0]
+
+    assert slot["n_readings"] == 3
+    # Une seule valeur brute NaN sur les 3 relevés du créneau : n_present = 2, jamais 3.
+    assert slot["Dissolved Oxygen_raw_n_present"] == 2
+
+
+def test_resample_hourly_n_out_of_bounds_never_counts_missing_raw_value() -> None:
+    """Une valeur brute manquante (NaN) n'est jamais comptée dans <label>_n_out_of_bounds, même
+    au sein d'un créneau contenant par ailleurs une vraie valeur hors bornes (mutation M11 :
+    compteur hors borne comptant aussi les NaN bruts)."""
+    upper = config.DISSOLVED_OXYGEN_BOUNDS["max"]
+    df = _resample_input(
+        [
+            {"created_at": "2021-06-19 00:05:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": upper + 5,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": True},
+            {"created_at": "2021-06-19 00:15:00", "Dissolved Oxygen(g/ml)": None, "Dissolved Oxygen_raw": None,
+             "Dissolved Oxygen_imputed": False, "Dissolved Oxygen_missing": True},
+        ]
+    )
+    out = features.resample_hourly(df)
+    slot = out.iloc[0]
+
+    # Une seule valeur brute réellement hors bornes dans le créneau ; le NaN
+    # de la seconde ligne n'est jamais compté, quelle que soit sa position.
+    assert slot["Dissolved Oxygen_n_out_of_bounds"] == 1
