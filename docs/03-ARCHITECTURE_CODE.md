@@ -52,12 +52,15 @@ Projet_pisiculture/
 ├── .gitattributes               <- fins de ligne (LF, exceptions Windows), fichiers binaires
 ├── pytest.ini                   <- configuration pytest (pythonpath = .)
 ├── README.md
-└── requirements.txt
+├── requirements.txt              <- versions exactes (==), ADR-012
+└── requirements-lock.txt         <- `pip freeze` complet du venv, dépendances transitives incluses (ADR-012)
 ```
 
 *Arborescence complétée le 2026-09-16 : ajout de `src/main.py` (cité par le README mais absent), des emplacements des modèles entraînés et des rapports (non définis jusque-là), des journaux des agents et des tests manquants.*
 
 *Arborescence complétée le 2026-09-16 (soir) : fichiers partagés créés avant la délégation des squelettes (`pytest.ini`, `src/__init__.py` — J-20260916-017) ; `src/models/__init__.py` (ml-engineer) et `tests/test_config.py`, `data/README.md` (data-engineer) créés pendant la délégation (J-20260916-019 et 020) ; fichiers liés à la mise en place de la gestion de version (`LICENSE`, `.gitattributes`, `.github/pull_request_template.md` — J-20260916-015, ADR-007).*
+
+*Arborescence complétée le 2026-09-19 : `requirements-lock.txt` ajouté (ADR-012 — épinglage de l'environnement en versions exactes après dérive non tracée de matplotlib en cours de Jalon 2, défaut D12 de `reports/validations/jalon-2.md`).*
 
 ## `src/config.py`
 
@@ -112,7 +115,7 @@ def rebuild_growth_curve(df: pd.DataFrame) -> pd.DataFrame:
 Schéma du DataFrame retourné par `clean_data` (mis à jour ADR-011, décision G1 J-20260918-042, implémentation J-20260918-044) : **23 colonnes** au total — les 11 colonnes brutes, plus **trois** colonnes par variable bornée de `config.SENSOR_TYPES` (température, pH, oxygène dissous, ammoniac, soit 4 × 3 = 12 colonnes supplémentaires) :
 - `<label>_imputed` (`True` seulement si la valeur d'origine était hors bornes ou manquante **et** a été comblée par interpolation) ;
 - `<label>_missing` (`True` si elle est hors bornes ou manquante et **reste** `NaN`, trou trop long ou bord de série) — les deux drapeaux ne sont jamais vrais simultanément, et aucun des deux ne l'est sur une valeur d'origine valide (D9, `reports/validations/jalon-1.md`, vérifié par recalcul indépendant) ;
-- `<label>{config.RAW_VALUE_SUFFIX}` (suffixe `"_raw"`, ADR-011) : valeur brute d'origine telle que lue, sans aucune modification — y compris hors bornes, y compris `NaN` si elle l'était déjà — copiée depuis la série brute avant tout nettoyage, jamais imputée ni recalculée depuis la colonne nettoyée ; existe pour **toutes** les lignes (y compris les valeurs valides, où elle est égale à la colonne nettoyée). Conserve le signal des dérives de capteur que le nettoyage rend invisibles : sur l'épisode du plateau d'oxygène dissous (30/07-05/08, 13 422 relevés), la colonne nettoyée ne garde que 368 valeurs non manquantes contre 13 422 dans `Dissolved Oxygen_raw` (moyenne 36,47 mg/L) — J-20260918-044.
+- `<label>{config.RAW_VALUE_SUFFIX}` (suffixe `"_raw"`, ADR-011) : valeur brute d'origine telle que lue, sans aucune modification — y compris hors bornes, y compris `NaN` si elle l'était déjà — copiée depuis la série brute avant tout nettoyage, jamais imputée ni recalculée depuis la colonne nettoyée ; existe pour **toutes** les lignes (y compris les valeurs valides, où elle est égale à la colonne nettoyée). Conserve le signal des dérives de capteur que le nettoyage rend invisibles : sur l'épisode du plateau d'oxygène dissous (30/07-05/08, 13 422 relevés — fenêtre fermée ligne à ligne), la colonne nettoyée ne garde que 368 valeurs non manquantes contre 13 422 dans `Dissolved Oxygen_raw` (moyenne pondérée 36,47 mg/L) — J-20260918-044. Sur la couverture des 152 créneaux horaires produits par `resample_hourly` (25 relevés de plus, dernier créneau non fermé), les valeurs équivalentes sont 13 447 relevés et une moyenne de 36,1569 mg/L (moyenne des moyennes horaires) à 36,4071 mg/L (moyenne pondérée) — cadrages détaillés en `docs/01-DATA_DICTIONARY.md` anomalie 8 et `reports/validations/jalon-2.md` §7 (défaut D11).
 
 Nitrate et turbidité n'ont pas de colonne de marquage ni de colonne `_raw` dédiée (pas de borne absolue applicable, donc colonne brute jamais modifiée par le nettoyage : ADR-009 pour le nitrate, ADR-011 pour la turbidité — indicateur relatif) ; `raw_value_column` vaut `None` pour ces deux entrées dans `reports/cleaning_report.json`.
 

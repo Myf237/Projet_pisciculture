@@ -55,7 +55,7 @@ Chaque jalon correspond à un module fonctionnel. Un jalon n'est considéré "va
 
 **Critères de validation :**
 - [ ] Un seul point d'entrée permet de dérouler tout le pipeline (données → nettoyage → features → modèle → décision → dashboard)
-- [ ] Le scénario de démonstration est reproductible (mêmes résultats à chaque exécution)
+- [ ] Le scénario de démonstration est reproductible : deux exécutions produisent des **sorties de données identiques** (empreintes des CSV, des JSON et du journal de décisions `logs/decisions.log`). Les **images sont explicitement exclues** de ce critère — un rendu matplotlib dépend des polices installées sur la machine d'exécution, pas seulement des versions épinglées, et une empreinte d'image serait un critère invérifiable (ADR-012, 2026-09-19)
 - [ ] Le README technique permet à quelqu'un d'autre (ex. un membre du jury curieux) de relancer le projet sans assistance
 
 ## Validation finale — Alignement avec le mémoire

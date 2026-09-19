@@ -36,3 +36,4 @@
 | **Pull request (PR)** | Proposition de fusion d'une branche vers `main`, revue avant intégration ; ce projet impose le modèle `.github/pull_request_template.md` et le go humain (G2) |
 | **Merge commit** | Commit de fusion qui intègre tous les commits d'une branche dans `main` en conservant leur historique individuel (par opposition à un squash ou un rebase) |
 | **Tag** | Repère nommé sur un commit précis ; ce projet pose un tag annoté `jalon-N` après la fusion de chaque jalon validé |
+| **Épinglage de dépendances (pinning)** | Fixation d'une bibliothèque logicielle à une version exacte (`==`) plutôt qu'à une borne minimale (`>=`), pour qu'une même commande d'installation produise le même environnement à chaque exécution ; ce projet l'a adopté par l'ADR-012 après une dérive non tracée de matplotlib en cours de Jalon 2 |
