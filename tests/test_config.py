@@ -134,9 +134,9 @@ def test_ph_bounds_match_data_dictionary() -> None:
     assert config.PH_BOUNDS == {"min": 0, "max": 14}
 
 
-def test_open_decisions_are_none_not_guessed_values() -> None:
-    """RESAMPLING_FREQUENCY reste None (décision tranchée par ADR-010 mais appliquée seulement au Jalon 2, pas au nettoyage)."""
-    assert config.RESAMPLING_FREQUENCY is None
+def test_resampling_frequency_is_hourly_per_adr_010_applied_at_jalon_2() -> None:
+    """RESAMPLING_FREQUENCY = "1h" (ADR-010, décidée au Jalon 1) — appliquée par features.resample_hourly au Jalon 2."""
+    assert config.RESAMPLING_FREQUENCY == "1h"
 
 
 def test_ammonia_bounds_match_adr_003_and_adr_010() -> None:
@@ -174,8 +174,8 @@ def test_sensor_types_covers_all_water_quality_columns_with_expected_keys() -> N
         assert meta["threshold_key"] in config.THRESHOLDS
 
 
-def test_get_applicable_thresholds_excludes_gas_sensors_and_undecided_turbidity() -> None:
-    """D2 (reports/validations/jalon-1.md) : accès protégé — ammonia/nitrate/turbidity ne peuvent jamais en sortir."""
+def test_get_applicable_thresholds_excludes_gas_sensors_and_turbidity_indicator() -> None:
+    """D2 (reports/validations/jalon-1.md) : accès protégé — ammonia/nitrate/turbidity (ADR-011, indicateur relatif) ne peuvent jamais en sortir."""
     applicable = config.get_applicable_thresholds()
 
     assert "ammonia" not in applicable
@@ -204,6 +204,14 @@ def test_sensor_types_distinguishes_immersed_probes_from_gas_sensors_per_adr_009
     for raw_col in gas:
         assert config.SENSOR_TYPES[raw_col]["sensor"] == "gas"
         assert config.SENSOR_TYPES[raw_col]["absolute_thresholds_applicable"] is False
+
+
+def test_sensor_types_turbidity_is_decided_indicator_not_open_decision_per_adr_011() -> None:
+    """ADR-011 (accepté) : turbidité = indicateur relatif tranché (False), plus une décision ouverte (None) — D3, reports/validations/jalon-2.md."""
+    turbidity = config.SENSOR_TYPES["Turbidity(NTU)"]
+    assert turbidity["bounds"] is None
+    assert turbidity["absolute_thresholds_applicable"] is False  # décidé (ADR-011), pas None (ouvert)
+    assert "turbidity" not in config.get_applicable_thresholds()
 
 
 def test_other_raw_columns_covers_entry_id_and_population() -> None:

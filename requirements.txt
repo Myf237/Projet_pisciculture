@@ -1,19 +1,27 @@
+# Dépendances directes du projet, versions épinglées (==) sur l'état du venv
+# qui a produit les livrables du Jalon 2 (ADR reproductibilité, 2026-09-19).
+# Pour l'installation courante (`pip install -r requirements.txt`) et la
+# lecture par le jury : liste courte et commentée, une dépendance = un usage.
+# Pour la reproduction bit-exacte (dépendances transitives comprises,
+# ex. fonttools/contourpy qui influencent le rendu des figures) : voir
+# `requirements-lock.txt`, issu d'un `pip freeze` complet du même venv.
+
 # Données et calcul
-pandas>=2.0
-numpy>=1.24
-pyarrow>=14.0        # lecture/écriture Parquet (cahier des charges §7)
+pandas==3.0.5
+numpy==2.5.3
+pyarrow==25.0.1      # lecture/écriture Parquet (cahier des charges §7)
 
 # Modélisation
-scikit-learn>=1.3
-joblib>=1.3          # sauvegarde des modèles entraînés (models/)
+scikit-learn==1.9.1
+joblib==1.6.0         # sauvegarde des modèles entraînés (models/)
 
 # Visualisation et dashboard
-streamlit>=1.28
-matplotlib>=3.7
-seaborn>=0.12
+streamlit==1.64.0
+matplotlib==3.11.2
+seaborn==0.13.2
 
 # Exploration
-jupyter>=1.0         # notebooks d'exploration (notebooks/)
+jupyter==1.1.1         # notebooks d'exploration (notebooks/)
 
 # Tests
-pytest>=7.4
+pytest==9.1.1

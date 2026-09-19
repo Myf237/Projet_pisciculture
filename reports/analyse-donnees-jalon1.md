@@ -356,3 +356,50 @@ Les recommandations ci-dessous sont des propositions du data-engineer, **non des
 - `jalon1_croissance_poids.png` — courbe de croissance par paliers, Fish_Weight
 - `jalon1_croissance_longueur.png` — courbe de croissance par paliers, Fish_Length (non-monotonies en rouge)
 - `jalon1_ecarts_temporels_log.png` — distribution log des écarts entre relevés consécutifs
+
+---
+
+## Addendum du 2026-09-18 (Jalon 2) — pH et turbidité, matière chiffrée sans trancher
+
+**Agent :** data-engineer · **Portée :** section ajoutée, aucune ligne existante ci-dessus modifiée (règle n°3 doc-keeper appliquée par analogie — ne pas réécrire une analyse déjà livrée, corriger par ajout daté). Chiffres recalculés sur `data/processed/pond1_clean.csv` régénéré (`ingestion.load_raw_data` + `ingestion.clean_data`, mêmes fonctions que le pipeline réel), pas devinés. Détail et figures dans `notebooks/01_exploration.ipynb` §6 (`reports/figures/jalon2_turbidite_distribution.png`).
+
+### pH — resserrement à une plage réaliste
+
+145 relevés < 4 subsistent dans le livrable nettoyé (0,175 % des 83 086 valeurs valides), répartis en **deux groupes distincts, pas une fenêtre continue** :
+
+| Date | n | Position par rapport à l'épisode 2 |
+|---|---:|---|
+| 2021-09-15 | 4 | avant |
+| 2021-09-16 | 10 | avant |
+| 2021-09-17 | 13 | avant |
+| 2021-09-18 | 24 | avant |
+| 2021-09-19 | 11 | avant |
+| 2021-10-11 | 17 | après |
+| 2021-10-12 | 47 | après |
+| 2021-10-13 | 19 | après |
+
+**Correction factuelle par rapport au brief de délégation reçu** (« 145 relevés subsistent sous 4, tous situés dans l'épisode du 24/09 au 01/10 ») : ce n'est pas exact sur les données du livrable nettoyé — **aucun des 145 ne se situe entre le 20/09 et le 10/10**, c'est-à-dire aucun dans la fenêtre de l'épisode 2 (24/09-01/10) elle-même. Les 40 pH négatifs qui, eux, sont bien dans cette fenêtre (déjà documentés au §6 ci-dessus) sont hors bornes ([0, 14]) et donc marqués manquants dans le livrable nettoyé — ils ne font pas partie des 145 restants. Les 145 encadrent l'épisode 2 (immédiatement avant, puis juste après la coupure de connexion de 10 jours qui le suit) sans le recouvrir.
+
+**Options :**
+
+| Option | Effet chiffré |
+|---|---|
+| (a) Laisser tel quel (`PH_BOUNDS = {"min": 0, "max": 14}`, différé par l'ADR-010) | 145 valeurs restent dans le livrable, comprises entre 1,14327 et 3,999 |
+| (b) Resserrer `PH_BOUNDS` (ex. `min: 4`) | 145 valeurs de plus basculeraient en hors-bornes, puis imputées ou manquantes selon le trou encadrant (`MAX_INTERPOLATION_GAP = "1h"`) — la majorité resterait probablement manquante, ces relevés étant eux-mêmes dans des zones de connectivité dégradée |
+| (c) Ne pas resserrer au nettoyage ; filtrer au moment de l'usage (modélisation) si besoin | Aucun changement du livrable ; la décision est déportée au Jalon 3 |
+
+**Recommandation motivée (non tranchée, à confirmer G1) :** option (c). Le nettoyage physique [0, 14] reste défendable (aucune valeur n'est physiquement impossible sur l'échelle pH). Les 145 valeurs, situées sur les bords immédiats d'un épisode de dégradation de capteur déjà identifié (juste avant l'entrée en crise, juste après la reprise de connexion), sont plus utiles **signalées** que supprimées au nettoyage : elles pourraient marquer une dégradation progressive du capteur plus large que la seule fenêtre à valeurs négatives, utile à la détection d'anomalie du Jalon 3. Resserrer au nettoyage risquerait de faire disparaître ce signal plutôt qu'un artefact isolé.
+
+### Turbidité — seuil
+
+56,37 % des relevés (46 854 / 83 126) sont exactement à 100 (plafond de l'échelle) — identique sur le livrable nettoyé (colonne non modifiée, aucune borne de nettoyage appliquée à ce jour). Distribution complète : min 1,0, q25 91,0, médiane 100,0, q75 100,0, moyenne 87,49, écart-type 25,86 (`jalon2_turbidite_distribution.png`).
+
+**Options :**
+
+| Option | Conséquence |
+|---|---|
+| (a) Seuil critique = 100 (le plafond lui-même) | Capture « capteur saturé » comme signal, mais 56,37 % du temps en alerte — même écueil que le nitrate au Jalon 1 (§3), non exploitable pour une démonstration |
+| (b) Seuil sous 100 (ex. 80 ou 90 NTU) | Arbitraire sans source citée pour ce dataset précis ; réduit l'ampleur de l'alerte mais reste une valeur devinée |
+| (c) Traiter la turbidité comme `ammonia`/`nitrate` — indicateur relatif, sans seuil absolu, jusqu'à confirmation de la nature du capteur | Cohérent avec `config.get_applicable_thresholds()`, qui exclut déjà la turbidité (`absolute_thresholds_applicable = None`) |
+
+**Recommandation motivée (non tranchée, à confirmer G1) :** option (c), par le même raisonnement que pour le DO/l'ammoniac/le nitrate en A1 (Jalon 1, §1) : avec les seules données disponibles, on ne peut pas distinguer « eau réellement très trouble une bonne partie du cycle » de « capteur souvent saturé en fin d'échelle ». Fixer un seuil absolu sur un signal dont on ne sait pas s'il sature créerait une alerte quasi permanente (56 % du temps), invalidante pour la démonstration comme pour le mémoire — le même problème déjà rencontré et évité pour le nitrate.
